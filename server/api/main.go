@@ -83,10 +83,16 @@ func (wk *dbConnector) work(dbConnectorChan chan<- *dbConnector, dbchan <-chan d
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
+		//returns error if there is an error or bool true if all ok.
+		//it doesn't return an error or notify if no rows are changed. TBD
 		if msg.NumberOfColumnsExpected == 0 {
 			_, err := db.ExecContext(ctx, msg.Query)
 			var singleResult []interface{}
-			singleResult = append(singleResult, err)
+			if err != nil {
+				singleResult = append(singleResult, err)
+			} else {
+				singleResult = append(singleResult, true)
+			}
 			sendResults = append(sendResults, singleResult)
 			fmt.Println("DB Query Response:", sendResults)
 			msg.ReturnChan <- sendResults
@@ -118,7 +124,6 @@ func (wk *dbConnector) work(dbConnectorChan chan<- *dbConnector, dbchan <-chan d
 				continue // Skipping further processing for this query
 			}
 			// Process rows and fill the response interface as needed
-			// ... (Implement your row processing logic here) ...
 			defer rows.Close()
 		}
 
@@ -446,7 +451,7 @@ type UpdateChatTime struct {
 	TimeToUpdate string `json:"time"`
 }
 
-func startOfNewChat(w http.ResponseWriter, r *http.Request) {
+func updateChatStatus(w http.ResponseWriter, r *http.Request) {
 	//get any fields to update from body
 
 	var uct *UpdateChatTime
@@ -462,11 +467,19 @@ func startOfNewChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println("Chat start Request:", uct.ChatUUID)
+	log.Println("Chat Status Request:", uct.ChatUUID)
+
+	var queryStr string
+	if r.Method == "POST" {
+		queryStr = fmt.Sprintf("INSERT INTO chat (uuid, start_time) VALUES (%s, %s)",
+			singleQuote(uct.ChatUUID), singleQuote(verifiedTime))
+	} else {
+		queryStr = fmt.Sprintf("UPDATE chat SET end_time = %s WHERE uuid = %s",
+			singleQuote(verifiedTime), singleQuote(uct.ChatUUID))
+	}
 
 	dbq := dbQuery{
-		Query: fmt.Sprintf("INSERT INTO chat (uuid, start_time) VALUES (%s, %s)",
-			singleQuote(uct.ChatUUID), singleQuote(verifiedTime)),
+		Query:                   queryStr,
 		ReturnChan:              make(chan [][]interface{}),
 		NumberOfColumnsExpected: 0,
 		ExpectSingleRow:         false,
@@ -480,11 +493,15 @@ func startOfNewChat(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		log.Println("Chat Start Response:", resp)
+		log.Println("Chat Status Response:", resp)
 
 		if len(resp) != 1 { //only expecting a single response
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "db returned a result which is not correct, please review logs")
+			return
+		}
+
+		if _, ok := resp[0][0].(bool); ok {
 			return
 		}
 
@@ -497,7 +514,7 @@ func startOfNewChat(w http.ResponseWriter, r *http.Request) {
 			return
 		} else {
 			w.WriteHeader(http.StatusInternalServerError)
-			log.Printf("Something went wrong with type assertion for Chat Start Request, response not error type")
+			log.Printf("Something went wrong with type assertion for Chat update Request, response not error type")
 			fmt.Fprintf(w, "Something went wrong with type assertion")
 			return
 		}
@@ -546,7 +563,7 @@ func main() {
 	r.HandleFunc("/api/users/getexternal", getExternalUser).Methods("GET")
 	r.HandleFunc("/api/users/getexternalbyid/{id}", getExternalUserByID).Methods("GET")
 	r.HandleFunc("/api/users/updateexternalbyid/{id}", updateexternalbyid).Methods("PUT")
-	r.HandleFunc("/api/chat/start", startOfNewChat).Methods("POST")
+	r.HandleFunc("/api/chat/statusupdate", updateChatStatus).Methods("POST", "PUT")
 
 	fmt.Printf("Starting server  at port 8001\n")
 	log.Fatal(http.ListenAndServe(":8001", handlers.CORS(originsOk, headersOk, methodsOk)(r)))
