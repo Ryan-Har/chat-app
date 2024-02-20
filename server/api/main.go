@@ -27,9 +27,9 @@ const (
 
 type dbQuery struct {
 	Query                   string
-	ExpectSingleRow         bool
+	ExpectSingleRow         bool                 //true for single row, false if not
 	ReturnChan              chan [][]interface{} // Generic response channel
-	NumberOfColumnsExpected int                  //0, 1, any number more than 1 acts the same way
+	NumberOfColumnsExpected int                  //0 for no sql data returned
 }
 
 type dbConnector struct {
@@ -68,10 +68,6 @@ func (wk *dbConnector) work(dbConnectorChan chan<- *dbConnector, dbchan <-chan d
 		dbConnectorChan <- wk
 	}()
 
-	// Create a context for db operations
-	// ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	// defer cancel()
-
 	db, err := sql.Open("postgres",
 		fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 			dbhost, dbport, dbuser, dbpassword, dbname)) //consider secure password handling
@@ -86,6 +82,17 @@ func (wk *dbConnector) work(dbConnectorChan chan<- *dbConnector, dbchan <-chan d
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
+
+		if msg.NumberOfColumnsExpected == 0 {
+			_, err := db.ExecContext(ctx, msg.Query)
+			var singleResult []interface{}
+			singleResult = append(singleResult, err)
+			sendResults = append(sendResults, singleResult)
+			fmt.Println("DB Query Response:", sendResults)
+			msg.ReturnChan <- sendResults
+			close(msg.ReturnChan)
+			continue
+		}
 
 		// Choose the appropriate method based on whether you expect a single value:
 		switch msg.ExpectSingleRow {
@@ -104,6 +111,7 @@ func (wk *dbConnector) work(dbConnectorChan chan<- *dbConnector, dbchan <-chan d
 			}
 			sendResults = append(sendResults, columns)
 		case false:
+
 			rows, err := db.QueryContext(ctx, msg.Query)
 			if err != nil {
 				fmt.Println("error querying database:", err)
@@ -196,7 +204,6 @@ func addExternalUser(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "Error converting result to JSON")
 			return
 		}
-		return
 	}
 }
 
@@ -302,9 +309,7 @@ func getExternalUser(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "Error converting result to JSON")
 			return
 		}
-		return
 	}
-
 }
 
 func getExternalUserByID(w http.ResponseWriter, r *http.Request) {
@@ -361,7 +366,6 @@ func getExternalUserByID(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "Error converting result to JSON")
 			return
 		}
-		return
 	}
 }
 
@@ -434,7 +438,69 @@ func updateexternalbyid(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "Error converting result to JSON")
 			return
 		}
+	}
+}
+
+type UpdateChatTime struct {
+	ChatUUID     string `json:"chatuuid"`
+	TimeToUpdate string `json:"time"`
+}
+
+func startOfNewChat(w http.ResponseWriter, r *http.Request) {
+	//get any fields to update from body
+
+	var uct *UpdateChatTime
+	err := json.NewDecoder(r.Body).Decode(&uct)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	verifiedTime, err := verifyTimeFormat(uct.TimeToUpdate)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Println("Chat start Request:", uct.ChatUUID)
+
+	dbq := dbQuery{
+		Query: fmt.Sprintf("INSERT INTO chat (uuid, start_time) VALUES (%s, %s)",
+			singleQuote(uct.ChatUUID), singleQuote(verifiedTime)),
+		ReturnChan:              make(chan [][]interface{}),
+		NumberOfColumnsExpected: 0,
+		ExpectSingleRow:         false,
+	}
+
+	sendQuery(&dbq)
+
+	for {
+		resp := <-dbq.ReturnChan // read from the channel
+		if closed := dbq.ReturnChan == nil; closed {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		log.Println("Chat Start Response:", resp)
+
+		if len(resp) != 1 { //only expecting a single response
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "db returned a result which is not correct, please review logs")
+			return
+		}
+
+		if err, ok := resp[0][0].(error); ok {
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintf(w, "error Sending request %v", err.Error())
+				return
+			}
+			return
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+			log.Printf("Something went wrong with type assertion for Chat Start Request, response not error type")
+			fmt.Fprintf(w, "Something went wrong with type assertion")
+			return
+		}
 	}
 }
 
@@ -446,6 +512,16 @@ func checkNil(myInterface interface{}) bool {
 	default:
 		return false
 	}
+}
+
+func verifyTimeFormat(st string) (rs string, err error) {
+	layout := "2006-01-02 15:04:05.999999"
+
+	parsedTime, err := time.Parse(layout, st)
+	if err != nil {
+		return st, fmt.Errorf("time not valid for this application, format needed: %s", layout)
+	}
+	return parsedTime.Format(layout), nil
 }
 
 func respondJson(w *http.ResponseWriter) {
@@ -470,6 +546,7 @@ func main() {
 	r.HandleFunc("/api/users/getexternal", getExternalUser).Methods("GET")
 	r.HandleFunc("/api/users/getexternalbyid/{id}", getExternalUserByID).Methods("GET")
 	r.HandleFunc("/api/users/updateexternalbyid/{id}", updateexternalbyid).Methods("PUT")
+	r.HandleFunc("/api/chat/start", startOfNewChat).Methods("POST")
 
 	fmt.Printf("Starting server  at port 8001\n")
 	log.Fatal(http.ListenAndServe(":8001", handlers.CORS(originsOk, headersOk, methodsOk)(r)))
