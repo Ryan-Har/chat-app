@@ -294,8 +294,7 @@ func getExternalUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		eui.ID = intToStruct.(*ExternalUserInfo).ID
-		eui.EmailAddr = intToStruct.(*ExternalUserInfo).EmailAddr
+		eui.ID, eui.EmailAddr = structToVerify.ID, structToVerify.EmailAddr
 
 		err := json.NewEncoder(w).Encode(eui)
 		if err != nil {
@@ -354,11 +353,82 @@ func getExternalUserByID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		eui.Name = intToStruct.(*ExternalUserInfo).Name
-		eui.IPAddr = intToStruct.(*ExternalUserInfo).IPAddr
-		eui.EmailAddr = intToStruct.(*ExternalUserInfo).EmailAddr
+		eui.Name, eui.IPAddr, eui.EmailAddr = structToVerify.Name, structToVerify.IPAddr, structToVerify.EmailAddr
 
 		err := json.NewEncoder(w).Encode(eui)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "Error converting result to JSON")
+			return
+		}
+		return
+	}
+}
+
+func updateexternalbyid(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
+	respondJson(&w)
+
+	idString := mux.Vars(r)["id"]
+	idInt, err := strconv.Atoi(idString)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var eui *ExternalUserInfo
+	//get any fields to update from body
+	err = json.NewDecoder(r.Body).Decode(&eui)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	//overwrite id with int provided in the url, incase it's different to that applied in the body
+	eui.ID = int64(idInt)
+
+	log.Println("Update external User By ID Request:", eui.ID)
+
+	dbq := dbQuery{
+		Query: fmt.Sprintf("SELECT given_user_id, updated_name, updated_ip_address, updated_email FROM update_external_user_info(%d, %s, %s, %s)",
+			eui.ID,
+			singleQuote(eui.Name),
+			singleQuote(eui.IPAddr),
+			singleQuote(eui.EmailAddr)),
+		ReturnChan:              make(chan [][]interface{}),
+		NumberOfColumnsExpected: 4,
+		ExpectSingleRow:         true,
+	}
+
+	sendQuery(&dbq)
+
+	for {
+		resp := <-dbq.ReturnChan // read from the channel
+		if closed := dbq.ReturnChan == nil; closed {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		log.Println("Add external User Response:", resp)
+
+		if len(resp) != 1 { //only expecting a single response
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "db returned a result which is not correct, please review logs")
+			return
+		}
+
+		structToVerify := ExternalUserInfo{}
+		intToStruct := interface{}(&structToVerify)
+
+		if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+			return
+		}
+		if eui.ID != structToVerify.ID {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "error verifying db results. Error: %v", err.Error())
+			return
+		}
+		err := json.NewEncoder(w).Encode(structToVerify)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "Error converting result to JSON")
@@ -399,6 +469,7 @@ func main() {
 	r.HandleFunc("/api/users/addexternal", addExternalUser).Methods("POST")
 	r.HandleFunc("/api/users/getexternal", getExternalUser).Methods("GET")
 	r.HandleFunc("/api/users/getexternalbyid/{id}", getExternalUserByID).Methods("GET")
+	r.HandleFunc("/api/users/updateexternalbyid/{id}", updateexternalbyid).Methods("PUT")
 
 	fmt.Printf("Starting server  at port 8001\n")
 	log.Fatal(http.ListenAndServe(":8001", handlers.CORS(originsOk, headersOk, methodsOk)(r)))
