@@ -531,6 +531,21 @@ func checkNil(myInterface interface{}) bool {
 	}
 }
 
+// returns doubled up single quotes. e.g Lay's -> Lay”s. Need to escape for storing in database
+func doubleUpSingleQuotes(str string) string {
+	var modified string
+	for _, char := range str {
+		switch char {
+		case '\'':
+			modified += "''"
+		default:
+			modified += string(char)
+		}
+	}
+	fmt.Println("hello", modified)
+	return modified
+}
+
 func verifyTimeFormat(st string) (rs string, err error) {
 	layout := "2006-01-02 15:04:05.999999"
 
