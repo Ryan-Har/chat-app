@@ -135,11 +135,6 @@ func (wk *dbConnector) work(dbConnectorChan chan<- *dbConnector, dbchan <-chan d
 	return err
 }
 
-// Add other functions to send queries to the channel
-func sendQuery(q *dbQuery) {
-	dbRequestChan <- *q
-}
-
 type ExternalUserInfo struct {
 	ID        int64  `json:"id,omitempty"`
 	Name      string `json:"name"`
@@ -182,35 +177,25 @@ func addExternalUser(w http.ResponseWriter, r *http.Request) {
 		ExpectSingleRow:         true,
 	}
 
-	sendQuery(&dbq)
+	resp, err := dbq.processRequest(w, "addExternalUser")
+	if err != nil {
+		fmt.Fprint(w, err.Error())
+		return
+	}
 
-	for {
-		resp, ok := <-dbq.ReturnChan // read from the channel
-		if !ok {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		log.Println("Add external User Response:", resp)
-		if len(resp) != 1 { //only expecting a single response
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "db returned a result which is not correct, please review logs")
-			return
-		}
-		structToVerify := idResponse{}
-		intToStruct := interface{}(&structToVerify)
+	structToVerify := idResponse{}
+	intToStruct := interface{}(&structToVerify)
 
-		if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
-			return
-		}
-		eui.ID = intToStruct.(*idResponse).ID
-		err := json.NewEncoder(w).Encode(eui)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "Error converting result to JSON")
-			return
-		}
+	if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+		return
+	}
+	eui.ID = structToVerify.ID
+	err = json.NewEncoder(w).Encode(eui)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error converting result to JSON")
 		return
 	}
 }
@@ -286,39 +271,29 @@ func getExternalUser(w http.ResponseWriter, r *http.Request) {
 		ExpectSingleRow:         true,
 	}
 
-	sendQuery(&dbq)
+	resp, err := dbq.processRequest(w, "getExternalUser")
+	if err != nil {
+		fmt.Fprint(w, err.Error())
+	}
 
-	for {
-		resp, ok := <-dbq.ReturnChan // read from the channel
-		if !ok {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		log.Println("Get external User Response:", resp)
-		if len(resp) != 1 { // only expecting a single response
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "db returned a result which is not correct, please review logs")
-			return
-		}
-		structToVerify := ExternalUserInfo{}
-		intToStruct := interface{}(&structToVerify)
+	structToVerify := ExternalUserInfo{}
+	intToStruct := interface{}(&structToVerify)
 
-		if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
-			return
-		}
-
-		eui.ID, eui.EmailAddr = structToVerify.ID, structToVerify.EmailAddr
-
-		err := json.NewEncoder(w).Encode(eui)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "Error converting result to JSON")
-			return
-		}
+	if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
 		return
 	}
+
+	eui.ID, eui.EmailAddr = structToVerify.ID, structToVerify.EmailAddr
+
+	err = json.NewEncoder(w).Encode(eui)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error converting result to JSON")
+		return
+	}
+
 }
 
 func getExternalUserByID(w http.ResponseWriter, r *http.Request) {
@@ -344,37 +319,27 @@ func getExternalUserByID(w http.ResponseWriter, r *http.Request) {
 		ExpectSingleRow:         true,
 	}
 
-	sendQuery(&dbq)
+	resp, err := dbq.processRequest(w, "getExternalUserByID")
+	if err != nil {
+		fmt.Fprint(w, err.Error())
+		return
+	}
 
-	for {
-		resp, ok := <-dbq.ReturnChan // read from the channel
-		if !ok {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		log.Println("Get External User By ID response:", resp)
-		if len(resp) != 1 { //only expecting a single response
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "db returned a result which is not correct, please review logs")
-			return
-		}
-		structToVerify := ExternalUserInfo{}
-		intToStruct := interface{}(&structToVerify)
+	structToVerify := ExternalUserInfo{}
+	intToStruct := interface{}(&structToVerify)
 
-		if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
-			return
-		}
+	if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+		return
+	}
 
-		eui.Name, eui.IPAddr, eui.EmailAddr = structToVerify.Name, structToVerify.IPAddr, structToVerify.EmailAddr
+	eui.Name, eui.IPAddr, eui.EmailAddr = structToVerify.Name, structToVerify.IPAddr, structToVerify.EmailAddr
 
-		err := json.NewEncoder(w).Encode(eui)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "Error converting result to JSON")
-			return
-		}
+	err = json.NewEncoder(w).Encode(eui)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error converting result to JSON")
 		return
 	}
 }
@@ -413,43 +378,32 @@ func updateExternalByID(w http.ResponseWriter, r *http.Request) {
 		ExpectSingleRow:         true,
 	}
 
-	sendQuery(&dbq)
-
-	for {
-		resp, ok := <-dbq.ReturnChan // read from the channel
-		if !ok {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		log.Println("Add external User Response:", resp)
-
-		if len(resp) != 1 { //only expecting a single response
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "db returned a result which is not correct, please review logs")
-			return
-		}
-
-		structToVerify := ExternalUserInfo{}
-		intToStruct := interface{}(&structToVerify)
-
-		if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
-			return
-		}
-		if eui.ID != structToVerify.ID {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "error verifying db results. Error: %v", err.Error())
-			return
-		}
-		err := json.NewEncoder(w).Encode(structToVerify)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "Error converting result to JSON")
-			return
-		}
+	resp, err := dbq.processRequest(w, "updateExternalByID")
+	if err != nil {
+		fmt.Fprint(w, err.Error())
 		return
 	}
+
+	structToVerify := ExternalUserInfo{}
+	intToStruct := interface{}(&structToVerify)
+
+	if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+		return
+	}
+	if eui.ID != structToVerify.ID {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "error verifying db results. Error: %v", err.Error())
+		return
+	}
+	err = json.NewEncoder(w).Encode(structToVerify)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error converting result to JSON")
+		return
+	}
+
 }
 
 type UpdateChatTime struct {
@@ -490,40 +444,9 @@ func updateChatStatus(w http.ResponseWriter, r *http.Request) {
 		ExpectSingleRow:         false,
 	}
 
-	sendQuery(&dbq)
-
-	for {
-		resp, ok := <-dbq.ReturnChan // read from the channel
-		if !ok {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		log.Println("Chat Status Response:", resp)
-
-		if len(resp) != 1 { //only expecting a single response
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "db returned a result which is not correct, please review logs")
-			return
-		}
-
-		if _, ok := resp[0][0].(bool); ok {
-			return
-		}
-
-		if err, ok := resp[0][0].(error); ok {
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Fprintf(w, "error Sending request %v", err.Error())
-				return
-			}
-			return
-		} else {
-			w.WriteHeader(http.StatusInternalServerError)
-			log.Printf("Something went wrong with type assertion for Chat update Request, response not error type")
-			fmt.Fprintf(w, "Something went wrong with type assertion")
-			return
-		}
-		return
+	_, err = dbq.processRequest(w, "updateChatStatus")
+	if err != nil {
+		fmt.Fprint(w, err.Error())
 	}
 }
 
@@ -566,43 +489,59 @@ func addInternalUser(w http.ResponseWriter, r *http.Request) {
 		ExpectSingleRow:         true,
 	}
 
-	sendQuery(&dbq)
+	resp, err := dbq.processRequest(w, "addInternalUser")
+	if err != nil {
+		fmt.Fprint(w, err.Error())
+		return
+	}
+
+	structToVerify := idResponse{}
+	intToStruct := interface{}(&structToVerify)
+
+	if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+		return
+	}
+	iui.ID = structToVerify.ID
+	err = json.NewEncoder(w).Encode(iui)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error converting result to JSON")
+		return
+	}
+}
+
+func (dbq *dbQuery) processRequest(w http.ResponseWriter, funcCaller string) ([][]interface{}, error) {
+	dbRequestChan <- *dbq
 
 	for {
 		resp, ok := <-dbq.ReturnChan // read from the channel
 		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
-			return
+			return resp, errors.New("channel closed, no data")
 		}
 
-		log.Println("Add internal User Response:", resp)
+		log.Printf("%s Response: %v", funcCaller, resp)
 
-		if len(resp) != 1 { //only expecting a single response
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "db returned a result which is not correct, please review logs")
-			return
+		if dbq.ExpectSingleRow {
+			if len(resp) != 1 { //only expecting a single response
+				w.WriteHeader(http.StatusInternalServerError)
+				return resp, errors.New("db returned a result which is not correct, please review logs")
+			}
 		}
+
 		if err, ok := resp[0][0].(error); ok {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "error when running database query: %v", err.Error())
-			return
-		}
-		structToVerify := idResponse{}
-		intToStruct := interface{}(&structToVerify)
+			if err.Error() == "sql: no rows in result set" {
+				w.WriteHeader(http.StatusNoContent)
+				return resp, errors.New("no results")
+			}
 
-		if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
-			return
+			return resp, fmt.Errorf("error when running database query: %v", err.Error())
 		}
-		iui.ID = structToVerify.ID
-		err := json.NewEncoder(w).Encode(iui)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "Error converting result to JSON")
-			return
-		}
-		return
+
+		return resp, nil
 	}
 }
 
