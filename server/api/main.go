@@ -113,9 +113,12 @@ func (wk *dbConnector) work(dbConnectorChan chan<- *dbConnector, dbchan <-chan d
 			err := db.QueryRowContext(ctx, msg.Query).Scan(columnPointers...)
 			if err != nil {
 				fmt.Println("error querying database:", err)
-				continue // Skipping further processing for this query
+				columns[0] = err
 			}
+
 			sendResults = append(sendResults, columns)
+			msg.ReturnChan <- sendResults
+			close(msg.ReturnChan)
 		case false:
 
 			rows, err := db.QueryContext(ctx, msg.Query)
@@ -125,11 +128,9 @@ func (wk *dbConnector) work(dbConnectorChan chan<- *dbConnector, dbchan <-chan d
 			}
 			// Process rows and fill the response interface as needed
 			defer rows.Close()
+			msg.ReturnChan <- sendResults
+			close(msg.ReturnChan)
 		}
-
-		fmt.Println("DB Query Response:", sendResults)
-		msg.ReturnChan <- sendResults
-		close(msg.ReturnChan)
 	}
 	return err
 }
@@ -173,7 +174,8 @@ func addExternalUser(w http.ResponseWriter, r *http.Request) {
 	log.Println("Add external User Request:", eui)
 
 	dbq := dbQuery{
-		Query: fmt.Sprintf("SELECT add_external_user(%s, %s)", singleQuote(eui.Name),
+		Query: fmt.Sprintf("SELECT add_external_user(%s, %s)",
+			singleQuote(doubleUpSingleQuotes(eui.Name)),
 			singleQuote(eui.IPAddr)),
 		ReturnChan:              make(chan [][]interface{}),
 		NumberOfColumnsExpected: 1,
@@ -183,8 +185,8 @@ func addExternalUser(w http.ResponseWriter, r *http.Request) {
 	sendQuery(&dbq)
 
 	for {
-		resp := <-dbq.ReturnChan // read from the channel
-		if closed := dbq.ReturnChan == nil; closed {
+		resp, ok := <-dbq.ReturnChan // read from the channel
+		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -209,6 +211,7 @@ func addExternalUser(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "Error converting result to JSON")
 			return
 		}
+		return
 	}
 }
 
@@ -276,7 +279,7 @@ func getExternalUser(w http.ResponseWriter, r *http.Request) {
 
 	dbq := dbQuery{
 		Query: fmt.Sprintf("SELECT user_id, name, ip_address, email FROM external_users WHERE name = %s AND ip_address = %s",
-			singleQuote(eui.Name),
+			singleQuote(doubleUpSingleQuotes(eui.Name)),
 			singleQuote(eui.IPAddr)),
 		ReturnChan:              make(chan [][]interface{}),
 		NumberOfColumnsExpected: 4,
@@ -286,8 +289,8 @@ func getExternalUser(w http.ResponseWriter, r *http.Request) {
 	sendQuery(&dbq)
 
 	for {
-		resp := <-dbq.ReturnChan // read from the channel
-		if closed := dbq.ReturnChan == nil; closed {
+		resp, ok := <-dbq.ReturnChan // read from the channel
+		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -314,6 +317,7 @@ func getExternalUser(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "Error converting result to JSON")
 			return
 		}
+		return
 	}
 }
 
@@ -343,8 +347,8 @@ func getExternalUserByID(w http.ResponseWriter, r *http.Request) {
 	sendQuery(&dbq)
 
 	for {
-		resp := <-dbq.ReturnChan
-		if closed := dbq.ReturnChan == nil; closed {
+		resp, ok := <-dbq.ReturnChan // read from the channel
+		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -371,10 +375,11 @@ func getExternalUserByID(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "Error converting result to JSON")
 			return
 		}
+		return
 	}
 }
 
-func updateexternalbyid(w http.ResponseWriter, r *http.Request) {
+func updateExternalByID(w http.ResponseWriter, r *http.Request) {
 	enableCors(&w)
 	respondJson(&w)
 
@@ -400,9 +405,9 @@ func updateexternalbyid(w http.ResponseWriter, r *http.Request) {
 	dbq := dbQuery{
 		Query: fmt.Sprintf("SELECT given_user_id, updated_name, updated_ip_address, updated_email FROM update_external_user_info(%d, %s, %s, %s)",
 			eui.ID,
-			singleQuote(eui.Name),
+			singleQuote(doubleUpSingleQuotes(eui.Name)),
 			singleQuote(eui.IPAddr),
-			singleQuote(eui.EmailAddr)),
+			singleQuote(doubleUpSingleQuotes(eui.EmailAddr))),
 		ReturnChan:              make(chan [][]interface{}),
 		NumberOfColumnsExpected: 4,
 		ExpectSingleRow:         true,
@@ -411,8 +416,8 @@ func updateexternalbyid(w http.ResponseWriter, r *http.Request) {
 	sendQuery(&dbq)
 
 	for {
-		resp := <-dbq.ReturnChan // read from the channel
-		if closed := dbq.ReturnChan == nil; closed {
+		resp, ok := <-dbq.ReturnChan // read from the channel
+		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -443,6 +448,7 @@ func updateexternalbyid(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "Error converting result to JSON")
 			return
 		}
+		return
 	}
 }
 
@@ -452,7 +458,6 @@ type UpdateChatTime struct {
 }
 
 func updateChatStatus(w http.ResponseWriter, r *http.Request) {
-	//get any fields to update from body
 
 	var uct *UpdateChatTime
 	err := json.NewDecoder(r.Body).Decode(&uct)
@@ -488,8 +493,8 @@ func updateChatStatus(w http.ResponseWriter, r *http.Request) {
 	sendQuery(&dbq)
 
 	for {
-		resp := <-dbq.ReturnChan // read from the channel
-		if closed := dbq.ReturnChan == nil; closed {
+		resp, ok := <-dbq.ReturnChan // read from the channel
+		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -518,6 +523,86 @@ func updateChatStatus(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "Something went wrong with type assertion")
 			return
 		}
+		return
+	}
+}
+
+type InternalUserInfo struct {
+	ID             int64  `json:"id,omitempty"`
+	RoleID         int64  `json:"roleid"`
+	FirstName      string `json:"firstname"`
+	Surname        string `json:"surname"`
+	EmailAddr      string `json:"email,omitempty"`
+	HashedPassword string `json:"password"`
+}
+
+func addInternalUser(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
+	respondJson(&w)
+
+	var iui *InternalUserInfo
+	err := json.NewDecoder(r.Body).Decode(&iui)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if iui.RoleID == 0 || iui.FirstName == "" || iui.Surname == "" || iui.EmailAddr == "" || iui.HashedPassword == "" {
+		http.Error(w, errors.New("the following information needs to be provided: roleid, firstname, surname, email, password").Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Println("Add internal user request:", iui)
+
+	dbq := dbQuery{
+		Query: fmt.Sprintf("SELECT add_internal_user(%d, %s, %s, %s, %s)",
+			iui.RoleID,
+			singleQuote(doubleUpSingleQuotes(iui.FirstName)),
+			singleQuote(doubleUpSingleQuotes(iui.Surname)),
+			singleQuote(doubleUpSingleQuotes(iui.EmailAddr)),
+			singleQuote(doubleUpSingleQuotes(iui.HashedPassword))),
+		ReturnChan:              make(chan [][]interface{}),
+		NumberOfColumnsExpected: 1,
+		ExpectSingleRow:         true,
+	}
+
+	sendQuery(&dbq)
+
+	for {
+		resp, ok := <-dbq.ReturnChan // read from the channel
+		if !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		log.Println("Add internal User Response:", resp)
+
+		if len(resp) != 1 { //only expecting a single response
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "db returned a result which is not correct, please review logs")
+			return
+		}
+		if err, ok := resp[0][0].(error); ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "error when running database query: %v", err.Error())
+			return
+		}
+		structToVerify := idResponse{}
+		intToStruct := interface{}(&structToVerify)
+
+		if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+			return
+		}
+		iui.ID = structToVerify.ID
+		err := json.NewEncoder(w).Encode(iui)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "Error converting result to JSON")
+			return
+		}
+		return
 	}
 }
 
@@ -542,7 +627,6 @@ func doubleUpSingleQuotes(str string) string {
 			modified += string(char)
 		}
 	}
-	fmt.Println("hello", modified)
 	return modified
 }
 
@@ -577,8 +661,9 @@ func main() {
 	r.HandleFunc("/api/users/addexternal", addExternalUser).Methods("POST")
 	r.HandleFunc("/api/users/getexternal", getExternalUser).Methods("GET")
 	r.HandleFunc("/api/users/getexternalbyid/{id}", getExternalUserByID).Methods("GET")
-	r.HandleFunc("/api/users/updateexternalbyid/{id}", updateexternalbyid).Methods("PUT")
+	r.HandleFunc("/api/users/updateexternalbyid/{id}", updateExternalByID).Methods("PUT")
 	r.HandleFunc("/api/chat/statusupdate", updateChatStatus).Methods("POST", "PUT")
+	r.HandleFunc("/api/users/addinternal", addInternalUser).Methods("POST")
 
 	fmt.Printf("Starting server  at port 8001\n")
 	log.Fatal(http.ListenAndServe(":8001", handlers.CORS(originsOk, headersOk, methodsOk)(r)))
