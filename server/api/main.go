@@ -344,7 +344,7 @@ func getExternalUserByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func updateExternalByID(w http.ResponseWriter, r *http.Request) {
+func updateExternalUserByID(w http.ResponseWriter, r *http.Request) {
 	enableCors(&w)
 	respondJson(&w)
 
@@ -512,6 +512,115 @@ func addInternalUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func getInternalUserByID(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
+	respondJson(&w)
+
+	idString := mux.Vars(r)["id"]
+	idInt, err := strconv.Atoi(idString)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	iui := &InternalUserInfo{}
+	iui.ID = int64(idInt)
+
+	log.Println("Get Internal User By ID Request:", iui.ID)
+
+	dbq := dbQuery{
+		Query:                   fmt.Sprintf("SELECT user_id, role_id, firstname, surname, email, password FROM internal_users WHERE user_id = %d", iui.ID),
+		ReturnChan:              make(chan [][]interface{}),
+		NumberOfColumnsExpected: 6,
+		ExpectSingleRow:         true,
+	}
+
+	resp, err := dbq.processRequest(w, "getInternalUserByID")
+	if err != nil {
+		fmt.Fprint(w, err.Error())
+		return
+	}
+
+	structToVerify := InternalUserInfo{}
+	intToStruct := interface{}(&structToVerify)
+
+	if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+		return
+	}
+
+	err = json.NewEncoder(w).Encode(structToVerify)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error converting result to JSON")
+		return
+	}
+}
+
+func updateInternalUserByID(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
+	respondJson(&w)
+
+	idString := mux.Vars(r)["id"]
+	idInt, err := strconv.Atoi(idString)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var iui *InternalUserInfo
+	err = json.NewDecoder(r.Body).Decode(&iui)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	//overwrite id with int provided in the url, incase it's different to that applied in the body
+	iui.ID = int64(idInt)
+
+	log.Println("Update internal user by ID request:", iui.ID)
+
+	dbq := dbQuery{
+		Query: fmt.Sprintf("SELECT given_user_id, updated_role_id, updated_firstname, updated_surname, updated_email, updated_password FROM update_internal_user_info(%d, %d, %s, %s, %s, %s)",
+			iui.ID,
+			iui.RoleID,
+			singleQuote(doubleUpSingleQuotes(iui.FirstName)),
+			singleQuote(doubleUpSingleQuotes(iui.Surname)),
+			singleQuote(doubleUpSingleQuotes(iui.EmailAddr)),
+			singleQuote(doubleUpSingleQuotes(iui.HashedPassword))),
+		ReturnChan:              make(chan [][]interface{}),
+		NumberOfColumnsExpected: 6,
+		ExpectSingleRow:         true,
+	}
+
+	resp, err := dbq.processRequest(w, "updateInternalUserByID")
+	if err != nil {
+		fmt.Fprint(w, err.Error())
+		return
+	}
+
+	structToVerify := InternalUserInfo{}
+	intToStruct := interface{}(&structToVerify)
+
+	if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+		return
+	}
+	if iui.ID != structToVerify.ID {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "error verifying db results. Error: %v", err.Error())
+		return
+	}
+	err = json.NewEncoder(w).Encode(structToVerify)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error converting result to JSON")
+		return
+	}
+
+}
+
 func (dbq *dbQuery) processRequest(w http.ResponseWriter, funcCaller string) ([][]interface{}, error) {
 	dbRequestChan <- *dbq
 
@@ -537,6 +646,10 @@ func (dbq *dbQuery) processRequest(w http.ResponseWriter, funcCaller string) ([]
 				return resp, errors.New("no results")
 			}
 
+			if err.Error() == "pq: record not found" {
+				w.WriteHeader(http.StatusNotFound)
+				return resp, errors.New("record not found")
+			}
 			w.WriteHeader(http.StatusInternalServerError)
 			return resp, fmt.Errorf("error when running database query: %v", err.Error())
 		}
@@ -600,9 +713,11 @@ func main() {
 	r.HandleFunc("/api/users/addexternal", addExternalUser).Methods("POST")
 	r.HandleFunc("/api/users/getexternal", getExternalUser).Methods("GET")
 	r.HandleFunc("/api/users/getexternalbyid/{id}", getExternalUserByID).Methods("GET")
-	r.HandleFunc("/api/users/updateexternalbyid/{id}", updateExternalByID).Methods("PUT")
+	r.HandleFunc("/api/users/updateexternalbyid/{id}", updateExternalUserByID).Methods("PUT")
 	r.HandleFunc("/api/chat/statusupdate", updateChatStatus).Methods("POST", "PUT")
 	r.HandleFunc("/api/users/addinternal", addInternalUser).Methods("POST")
+	r.HandleFunc("/api/users/getinternalbyid/{id}", getInternalUserByID).Methods("GET")
+	r.HandleFunc("/api/users/updateinternalbyid/{id}", updateInternalUserByID).Methods("PUT")
 
 	fmt.Printf("Starting server  at port 8001\n")
 	log.Fatal(http.ListenAndServe(":8001", handlers.CORS(originsOk, headersOk, methodsOk)(r)))
