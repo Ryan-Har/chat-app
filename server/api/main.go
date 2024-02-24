@@ -432,35 +432,35 @@ func updateExternalUserByID(w http.ResponseWriter, r *http.Request) {
 
 }
 
-type UpdateChatTime struct {
-	ChatUUID     string `json:"chatuuid"`
-	TimeToUpdate string `json:"time"`
+type ChatUuidTime struct {
+	ChatUUID string `json:"chatuuid"`
+	Time     string `json:"time"`
 }
 
 func updateChatStatus(w http.ResponseWriter, r *http.Request) {
 
-	var uct *UpdateChatTime
-	err := json.NewDecoder(r.Body).Decode(&uct)
+	var cut *ChatUuidTime
+	err := json.NewDecoder(r.Body).Decode(&cut)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	verifiedTime, err := verifyTimeFormat(uct.TimeToUpdate)
+	verifiedTime, err := verifyTimeFormat(cut.Time)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	log.Println("Chat Status Request:", uct.ChatUUID)
+	log.Println("Chat Status Request:", cut.ChatUUID)
 
 	var queryStr string
 	if r.Method == "POST" {
 		queryStr = fmt.Sprintf("INSERT INTO chat (uuid, start_time) VALUES (%s, %s)",
-			singleQuote(uct.ChatUUID), singleQuote(verifiedTime))
+			singleQuote(cut.ChatUUID), singleQuote(verifiedTime))
 	} else {
 		queryStr = fmt.Sprintf("UPDATE chat SET end_time = %s WHERE uuid = %s",
-			singleQuote(verifiedTime), singleQuote(uct.ChatUUID))
+			singleQuote(verifiedTime), singleQuote(cut.ChatUUID))
 	}
 
 	dbq := dbQuery{
@@ -667,6 +667,47 @@ func addMessage(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func getChatsInProgress(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
+	respondJson(&w)
+
+	log.Println("get chats in progress request")
+
+	dbq := dbQuery{
+		Query:                   "SELECT uuid::VARCHAR, start_time::VARCHAR FROM chat WHERE end_time is null",
+		ReturnChan:              make(chan [][]interface{}),
+		NumberOfColumnsExpected: 2,
+		ExpectSingleRow:         false,
+	}
+
+	resp, err := dbq.processRequest(w, "getChatsInProgress")
+	if err != nil {
+		fmt.Fprint(w, err.Error())
+		return
+	}
+	respSlice := []ChatUuidTime{}
+
+	for i := range resp {
+
+		structToVerify := ChatUuidTime{}
+		intToStruct := interface{}(&structToVerify)
+
+		if err := convertSliceToStruct(resp[i], intToStruct); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+			return
+		}
+		respSlice = append(respSlice, structToVerify)
+	}
+
+	err = json.NewEncoder(w).Encode(respSlice)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error converting result to JSON")
+		return
+	}
+}
+
 func updateInternalUserByID(w http.ResponseWriter, r *http.Request) {
 	enableCors(&w)
 	respondJson(&w)
@@ -829,6 +870,7 @@ func main() {
 	r.HandleFunc("/api/users/updateinternalbyid/{id}", updateInternalUserByID).Methods("PUT")
 	r.HandleFunc("/api/chat/addmessage", addMessage).Methods("POST")
 	r.HandleFunc("/api/chat/getallmessages/{uuid}", getAllMessages).Methods("GET")
+	r.HandleFunc("/api/chat/inprogress", getChatsInProgress).Methods("GET")
 
 	fmt.Printf("Starting server  at port 8001\n")
 	log.Fatal(http.ListenAndServe(":8001", handlers.CORS(originsOk, headersOk, methodsOk)(r)))
