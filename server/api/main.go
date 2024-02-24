@@ -110,8 +110,7 @@ func (wk *dbConnector) work(dbConnectorChan chan<- *dbConnector, dbchan <-chan d
 				columnPointers[i] = &columns[i]
 			}
 
-			err := db.QueryRowContext(ctx, msg.Query).Scan(columnPointers...)
-			if err != nil {
+			if err := db.QueryRowContext(ctx, msg.Query).Scan(columnPointers...); err != nil {
 				fmt.Println("error querying database:", err)
 				columns[0] = err
 			}
@@ -128,6 +127,28 @@ func (wk *dbConnector) work(dbConnectorChan chan<- *dbConnector, dbchan <-chan d
 			}
 			// Process rows and fill the response interface as needed
 			defer rows.Close()
+
+			if rows.Next() {
+				for rows.Next() {
+					columns := make([]interface{}, msg.NumberOfColumnsExpected)
+					columnPointers := make([]interface{}, len(columns))
+					for i := range columns {
+						columnPointers[i] = &columns[i]
+					}
+					if err := rows.Scan(columnPointers...); err != nil {
+						fmt.Println("error querying database:", err)
+						columns[0] = err
+					}
+					sendResults = append(sendResults, columns)
+				}
+			} else {
+				noResultsMessage := make([]interface{}, 1)
+				noResultsMessage[0] = errors.New("sql: no rows in result set")
+				sendResults = append(sendResults, noResultsMessage)
+			}
+			if err := rows.Err(); err != nil {
+				log.Fatal(err)
+			}
 			msg.ReturnChan <- sendResults
 			close(msg.ReturnChan)
 		}
@@ -558,6 +579,89 @@ func getInternalUserByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type ChatMessage struct {
+	ChatUUID string `json:"chatuuid"`
+	UserID   int64  `json:"userid"`
+	Message  string `json:"message"`
+	Time     string `json:"time"`
+}
+
+func getAllMessages(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
+	respondJson(&w)
+
+	uuid := mux.Vars(r)["uuid"]
+
+	log.Println("get all message request for uuid:", uuid)
+
+	dbq := dbQuery{
+		Query:                   fmt.Sprintf("SELECT chat_uuid::VARCHAR, user_id_from, message, timestamp::VARCHAR FROM chat_messages WHERE chat_uuid = %s ORDER BY timestamp ASC", singleQuote(uuid)),
+		ReturnChan:              make(chan [][]interface{}),
+		NumberOfColumnsExpected: 4,
+		ExpectSingleRow:         false,
+	}
+
+	resp, err := dbq.processRequest(w, "getAllMessages")
+	if err != nil {
+		fmt.Fprint(w, err.Error())
+		return
+	}
+
+	respSlice := []ChatMessage{}
+
+	for i := range resp {
+
+		structToVerify := ChatMessage{}
+		intToStruct := interface{}(&structToVerify)
+
+		if err := convertSliceToStruct(resp[i], intToStruct); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+			return
+		}
+		respSlice = append(respSlice, structToVerify)
+	}
+
+	err = json.NewEncoder(w).Encode(respSlice)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error converting result to JSON")
+		return
+	}
+}
+
+func addMessage(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
+	respondJson(&w)
+
+	var cm *ChatMessage
+	err := json.NewDecoder(r.Body).Decode(&cm)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Println("Add chat message request:", cm)
+
+	dbq := dbQuery{
+		Query: fmt.Sprintf("INSERT INTO chat_messages (chat_uuid, user_id_from, message, timestamp) VALUES (%s, %d, %s, %s)",
+			singleQuote(cm.ChatUUID),
+			cm.UserID,
+			singleQuote(doubleUpSingleQuotes(cm.Message)),
+			singleQuote(cm.Time)),
+		ReturnChan:              make(chan [][]interface{}),
+		NumberOfColumnsExpected: 0,
+		ExpectSingleRow:         false,
+	}
+
+	_, err = dbq.processRequest(w, "addMessage")
+	if err != nil {
+		fmt.Fprint(w, err.Error())
+		return
+	}
+
+}
+
 func updateInternalUserByID(w http.ResponseWriter, r *http.Request) {
 	enableCors(&w)
 	respondJson(&w)
@@ -718,6 +822,8 @@ func main() {
 	r.HandleFunc("/api/users/addinternal", addInternalUser).Methods("POST")
 	r.HandleFunc("/api/users/getinternalbyid/{id}", getInternalUserByID).Methods("GET")
 	r.HandleFunc("/api/users/updateinternalbyid/{id}", updateInternalUserByID).Methods("PUT")
+	r.HandleFunc("/api/chat/addmessage", addMessage).Methods("POST")
+	r.HandleFunc("/api/chat/getallmessages/{uuid}", getAllMessages).Methods("GET")
 
 	fmt.Printf("Starting server  at port 8001\n")
 	log.Fatal(http.ListenAndServe(":8001", handlers.CORS(originsOk, headersOk, methodsOk)(r)))
