@@ -123,6 +123,11 @@ func (wk *dbConnector) work(dbConnectorChan chan<- *dbConnector, dbchan <-chan d
 			rows, err := db.QueryContext(ctx, msg.Query)
 			if err != nil {
 				fmt.Println("error querying database:", err)
+				queryError := make([]interface{}, 1)
+				queryError[0] = err
+				sendResults = append(sendResults, queryError)
+				msg.ReturnChan <- sendResults
+				close(msg.ReturnChan)
 				continue // Skipping further processing for this query
 			}
 			// Process rows and fill the response interface as needed
