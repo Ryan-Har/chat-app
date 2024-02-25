@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/handlers"
@@ -86,10 +87,12 @@ func (wk *dbConnector) work(dbConnectorChan chan<- *dbConnector, dbchan <-chan d
 		//returns error if there is an error or bool true if all ok.
 		//it doesn't return an error or notify if no rows are changed. TBD
 		if msg.NumberOfColumnsExpected == 0 {
-			_, err := db.ExecContext(ctx, msg.Query)
+			resp, err := db.ExecContext(ctx, msg.Query)
 			var singleResult []interface{}
 			if err != nil {
 				singleResult = append(singleResult, err)
+			} else if rows, _ := resp.RowsAffected(); rows == 0 {
+				singleResult = append(singleResult, errors.New("no rows changed"))
 			} else {
 				singleResult = append(singleResult, true)
 			}
@@ -791,19 +794,27 @@ func (dbq *dbQuery) processRequest(w http.ResponseWriter, funcCaller string) ([]
 		}
 
 		if err, ok := resp[0][0].(error); ok {
-			if err.Error() == "sql: no rows in result set" {
+			switch {
+			case err.Error() == "sql: no rows in result set":
 				w.WriteHeader(http.StatusNoContent)
 				return resp, errors.New("no results")
-			}
-
-			if err.Error() == "pq: record not found" {
+			case err.Error() == "pq: record not found":
 				w.WriteHeader(http.StatusNotFound)
 				return resp, errors.New("record not found")
+			case strings.HasPrefix(err.Error(), "pq: invalid input syntax"):
+				w.WriteHeader(http.StatusBadRequest)
+				return resp, err
+			case err.Error() == "no rows changed":
+				w.WriteHeader(http.StatusNoContent)
+				return resp, err
+			case strings.HasPrefix(err.Error(), "pq: duplicate key value violates unique constraint"):
+				w.WriteHeader(http.StatusBadRequest)
+				return resp, err
+			default:
+				w.WriteHeader(http.StatusInternalServerError)
+				return resp, fmt.Errorf("error when running database query: %v", err.Error())
 			}
-			w.WriteHeader(http.StatusInternalServerError)
-			return resp, fmt.Errorf("error when running database query: %v", err.Error())
 		}
-
 		return resp, nil
 	}
 }
