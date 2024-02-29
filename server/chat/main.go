@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -25,6 +27,7 @@ const (
 	lavinMQURL  = "amqp://guest:guest@localhost:32769/"
 	queueName   = "ChatMessageQueue"
 	workerCount = 5
+	apiBaseUrl  = "http://localhost:8001/api"
 )
 
 type worker struct {
@@ -160,6 +163,13 @@ var upgrader = websocket.Upgrader{
 // Room to store connected clients
 var room = make(map[string]map[*websocket.Conn]*UserInfo)
 
+type ExternalUserInfo struct {
+	ID        int64  `json:"id,omitempty"`
+	Name      string `json:"name"`
+	IPAddr    string `json:"ipaddr"`
+	EmailAddr string `json:"email,omitempty"`
+}
+
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -179,13 +189,45 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		name = "anonymous"
 	}
 	userid := r.URL.Query().Get("userid")
-
-	//if userid == "" {
-	//connect to api and check if user exists already by comparing the
-	//the ip and name provided to records.
-	//if it doesn't exist then create an external user for them and retrieve the
-	//new id for use here
-	//}
+	// connect to api and check if user exists already by comparing the
+	// the ip and name provided to records.
+	// if it doesn't exist then create an external user for them and retrieve the
+	// new id for use here
+	if userid == "" {
+		body := ExternalUserInfo{
+			Name:   name,
+			IPAddr: r.RemoteAddr,
+		}
+		jsonBody, err := json.Marshal(body)
+		if err != nil {
+			log.Println("error marshalling json:", body)
+			return
+		}
+		resp, err := sendGetRequest(apiBaseUrl+"/users/getexternal", bytes.NewReader(jsonBody))
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+		//no content - nothing was updated, likely dealt with out of order, requeue
+		if resp.StatusCode == 204 {
+			resp2, err := sendPostRequest(apiBaseUrl+"/users/addexternal", bytes.NewReader(jsonBody))
+			if err != nil {
+				return
+			}
+			defer resp2.Body.Close()
+			data, _ := io.ReadAll(resp2.Body)
+			if err := json.Unmarshal(data, &body); err != nil {
+				log.Println("error unmarshalling json")
+			}
+			userid = fmt.Sprint(body.ID)
+		} else {
+			data, _ := io.ReadAll(resp.Body)
+			if err := json.Unmarshal(data, &body); err != nil {
+				log.Println("error unmarshalling json")
+			}
+			userid = fmt.Sprint(body.ID)
+		}
+	}
 
 	//extract just the ip address from the remote connection
 	var ip string
@@ -266,6 +308,33 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+func sendPostRequest(url string, content *bytes.Reader) (*http.Response, error) {
+	req, err := http.NewRequest("POST", url, content)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	return resp, err
+}
+
+func sendGetRequest(url string, content *bytes.Reader) (*http.Response, error) {
+	req, err := http.NewRequest("GET", url, content)
+	if err != nil {
+		return nil, err
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func main() {
