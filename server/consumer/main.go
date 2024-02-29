@@ -212,7 +212,7 @@ func (wk *worker) workConsume(workerChan chan<- *worker) (err error) {
 	}
 
 	for msg := range msgs {
-		if err = processMessage(msg, ch); err != nil {
+		if err = processMessage(msg); err != nil {
 			fmt.Println(err.Error())
 			panic(err)
 		}
@@ -233,7 +233,7 @@ type ChatMessage struct {
 	Time     string `json:"time"`
 }
 
-func processMessage(msg amqp091.Delivery, ch *amqp091.Channel) error {
+func processMessage(msg amqp091.Delivery) error {
 
 	bm := BrokerMessage{}
 	if err := json.Unmarshal(msg.Body, &bm); err != nil {
