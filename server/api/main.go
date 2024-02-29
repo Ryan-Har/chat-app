@@ -137,6 +137,16 @@ func (wk *dbConnector) work(dbConnectorChan chan<- *dbConnector, dbchan <-chan d
 			defer rows.Close()
 
 			if rows.Next() {
+				columns := make([]interface{}, msg.NumberOfColumnsExpected)
+				columnPointers := make([]interface{}, len(columns))
+				for i := range columns {
+					columnPointers[i] = &columns[i]
+				}
+				if err := rows.Scan(columnPointers...); err != nil {
+					fmt.Println("error querying database:", err)
+					columns[0] = err
+				}
+				sendResults = append(sendResults, columns)
 				for rows.Next() {
 					columns := make([]interface{}, msg.NumberOfColumnsExpected)
 					columnPointers := make([]interface{}, len(columns))
