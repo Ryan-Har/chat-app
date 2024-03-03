@@ -170,6 +170,15 @@ type ExternalUserInfo struct {
 	EmailAddr string `json:"email,omitempty"`
 }
 
+type InternalUserInfo struct {
+	ID             int64  `json:"id,omitempty"`
+	RoleID         int64  `json:"roleid"`
+	FirstName      string `json:"firstname"`
+	Surname        string `json:"surname"`
+	EmailAddr      string `json:"email,omitempty"`
+	HashedPassword string `json:"password"`
+}
+
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -185,15 +194,14 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.URL.Query().Get("name")
-	if name == "" {
-		name = "anonymous"
-	}
+
 	userid := r.URL.Query().Get("userid")
 	// connect to api and check if user exists already by comparing the
 	// the ip and name provided to records.
 	// if it doesn't exist then create an external user for them and retrieve the
 	// new id for use here
-	if userid == "" {
+	if userid == "" && name != "" { //external users will provide name and no id
+		log.Println("external user joining")
 		body := ExternalUserInfo{
 			Name:   name,
 			IPAddr: r.RemoteAddr,
@@ -227,6 +235,22 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			}
 			userid = fmt.Sprint(body.ID)
 		}
+	} else if name == "" && userid != "" { //internal users will provide id but no name
+		log.Println("internal user joining")
+		var iui *InternalUserInfo
+
+		resp, err := sendGetRequest(apiBaseUrl+"/users/getinternalbyid/"+userid, nil)
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+		data, _ := io.ReadAll(resp.Body)
+		if err := json.Unmarshal(data, &iui); err != nil {
+			log.Println(string(data))
+			log.Println("error unmarshalling json", err)
+			return
+		}
+		name = fmt.Sprintf("%s %s", iui.FirstName, iui.Surname)
 	}
 
 	//extract just the ip address from the remote connection
@@ -325,10 +349,15 @@ func sendPostRequest(url string, content *bytes.Reader) (*http.Response, error) 
 }
 
 func sendGetRequest(url string, content *bytes.Reader) (*http.Response, error) {
-	req, err := http.NewRequest("GET", url, content)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
+
+	if content != nil {
+		req.Body = io.NopCloser(content)
+	}
+
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
