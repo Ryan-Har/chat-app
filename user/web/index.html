@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JavaScript Chat</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="web/styles.css">
+    <script>
+        var chatHost = "{{.ChatHost}}";
+        var chatPort = "{{.ChatPort}}";
+    </script>
 </head>
 <body>
     <div class="chat-container">
@@ -13,7 +17,7 @@
         <input type="text" id="message-input" placeholder="Type your message...">
         <button id="send-button" onclick="sendMessage()">Send</button>
     </div>
-    <script src="script.js"></script>
+    <script src="web/script.js"></script>
 </body>
 </html>
 

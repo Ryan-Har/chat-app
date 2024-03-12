@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -23,11 +24,17 @@ type UserInfo struct {
 	IPAddr string
 }
 
+var lavinmqHost string = os.Getenv("lavinmqHost")
+var lavinmqPort string = os.Getenv("lavinmqPort")
+var apiHost string = os.Getenv("apiHost")
+var apiPort string = os.Getenv("apiPort")
+
+var lavinMQURL string = fmt.Sprintf("amqp://guest:guest@%s:%s/", lavinmqHost, lavinmqPort)
+var apiBaseUrl string = fmt.Sprintf("http://%s:%s/api", apiHost, apiPort)
+
 const (
-	lavinMQURL  = "amqp://guest:guest@localhost:32769/"
 	queueName   = "ChatMessageQueue"
 	workerCount = 5
-	apiBaseUrl  = "http://localhost:8001/api"
 )
 
 type worker struct {

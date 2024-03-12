@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -15,12 +16,18 @@ import (
 	"github.com/rabbitmq/amqp091-go"
 )
 
+var lavinmqHost string = os.Getenv("lavinmqHost")
+var lavinmqPort string = os.Getenv("lavinmqPort")
+var apiHost string = os.Getenv("apiHost")
+var apiPort string = os.Getenv("apiPort")
+
+var lavinMQURL string = fmt.Sprintf("amqp://guest:guest@%s:%s/", lavinmqHost, lavinmqPort)
+var apiBaseUrl string = fmt.Sprintf("http://%s:%s/api", apiHost, apiPort)
+
 const (
-	lavinMQURL    = "amqp://guest:guest@localhost:32769/"
 	chatQueue     = "ChatMessageQueue"
 	workerCount   = 5
 	internalQueue = "InternalQueue"
-	apiBaseUrl    = "http://localhost:8001/api"
 )
 
 type BrokerMessage struct {

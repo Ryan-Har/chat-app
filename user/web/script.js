@@ -24,7 +24,8 @@ function connectToChat() {
         const guid = crypto.randomUUID();
 
         // WebSocket connection URL with the GUID and user's name
-        const wsUrl = `ws://localhost:8002/ws?guid=${guid}&name=${name}`;
+        const wsUrl = `ws://${chatHost}:${chatPort}/ws?guid=${guid}&name=${name}`;
+        console.log(wsUrl);
 
         // Establish WebSocket connection
         ws = new WebSocket(wsUrl);
@@ -32,7 +33,7 @@ function connectToChat() {
         // Set up event listeners for WebSocket
         ws.onopen = () => {
             console.log("WebSocket connection established");
-            resolve();run 
+            resolve();
         };
 
         ws.onmessage = (event) => {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -18,13 +19,11 @@ import (
 	_ "github.com/lib/pq"
 )
 
-const (
-	dbuser     = "guest"
-	dbpassword = "guest"
-	dbname     = "chat-app"
-	dbhost     = "127.0.0.1"
-	dbport     = "5432"
-)
+var dbuser string = os.Getenv("POSTGRES_USER")
+var dbpassword string = os.Getenv("POSTGRES_PASSWORD")
+var dbname string = os.Getenv("POSTGRES_DB")
+var dbhost string = os.Getenv("dbhost")
+var dbport string = os.Getenv("dbport")
 
 type dbQuery struct {
 	Query                   string

@@ -3,19 +3,27 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/rabbitmq/amqp091-go"
 )
 
+var lavinmqHost string = os.Getenv("lavinmqHost")
+var lavinmqPort string = os.Getenv("lavinmqPort")
+var apiHost string = os.Getenv("apiHost")
+var apiPort string = os.Getenv("apiPort")
+
+var lavinMQURL string = fmt.Sprintf("amqp://guest:guest@%s:%s/", lavinmqHost, lavinmqPort)
+var apiBaseUrl string = fmt.Sprintf("http://%s:%s/api", apiHost, apiPort)
+
 const (
-	lavinMQURL    = "amqp://guest:guest@localhost:32769/"
 	workerCount   = 5
 	internalQueue = "InternalQueue"
-	apiBaseUrl    = "http://localhost:8001/api"
 )
 
 type BrokerMessage struct {
@@ -228,11 +236,33 @@ func streamChats(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	data := struct {
+		ChatHost string
+		ChatPort string
+	}{
+		ChatHost: os.Getenv("chatHost"),
+		ChatPort: os.Getenv("chatPort"),
+	}
+
+	tmpl, err := template.ParseFiles("web/index.html")
+	if err != nil {
+		panic(err)
+	}
+
 	if err := oc.populateFromDB(); err != nil {
-		log.Println(err.Error())
+		log.Println("error populating from db", err.Error())
 	}
 	go workerManager()
-	http.Handle("/", http.FileServer(http.Dir("web")))
+	// Handle the root URL
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Execute the template, passing in the data
+		err := tmpl.Execute(w, data)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
+	http.Handle("/web/", http.StripPrefix("/web/", http.FileServer(http.Dir("web"))))
 	http.HandleFunc("/chats", streamChats)
 	http.ListenAndServe(":8005", nil)
 }
