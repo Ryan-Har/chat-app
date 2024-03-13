@@ -59,7 +59,7 @@ function connectToChat(guid) {
     console.log(guid)
     lastConnectedGuid = guid
     return new Promise((resolve, reject) => {
-        const internalUserID = 196;
+        const internalUserID = 1; 
 
         // WebSocket connection URL with the GUID and user's name
         const wsUrl = `ws://${chatHost}:${chatPort}/ws?guid=${guid}&userid=${internalUserID.toString()}`;
