@@ -232,13 +232,13 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			defer resp2.Body.Close()
 			data, _ := io.ReadAll(resp2.Body)
 			if err := json.Unmarshal(data, &body); err != nil {
-				log.Println("error unmarshalling json")
+				log.Println("error unmarshalling json with status code 204", err)
 			}
 			userid = fmt.Sprint(body.ID)
 		} else {
 			data, _ := io.ReadAll(resp.Body)
 			if err := json.Unmarshal(data, &body); err != nil {
-				log.Println("error unmarshalling json")
+				log.Printf("error unmarshalling json with status code %d: %v \n", resp.StatusCode, err.Error())
 			}
 			userid = fmt.Sprint(body.ID)
 		}

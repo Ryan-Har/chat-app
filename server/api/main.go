@@ -77,6 +77,11 @@ func (wk *dbConnector) work(dbConnectorChan chan<- *dbConnector, dbchan <-chan d
 	defer db.Close()
 
 	for msg := range dbchan {
+		if err := db.Ping(); err != nil {
+			dbRequestChan <- msg
+			panic(err)
+		}
+
 		var sendResults [][]interface{}
 		fmt.Println("DB Query Running:", msg)
 
@@ -432,7 +437,7 @@ func updateExternalUserByID(w http.ResponseWriter, r *http.Request) {
 	}
 	if eui.ID != structToVerify.ID {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "error verifying db results. Error: %v", err.Error())
+		fmt.Fprintf(w, "error verifying db results. Error: %v", err)
 		return
 	}
 	err = json.NewEncoder(w).Encode(structToVerify)
@@ -771,7 +776,7 @@ func updateInternalUserByID(w http.ResponseWriter, r *http.Request) {
 	}
 	if iui.ID != structToVerify.ID {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "error verifying db results. Error: %v", err.Error())
+		fmt.Fprintf(w, "error verifying db results")
 		return
 	}
 	err = json.NewEncoder(w).Encode(structToVerify)
