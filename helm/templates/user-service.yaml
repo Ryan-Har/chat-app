@@ -1,0 +1,16 @@
+# service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: "{{ .Values.user.name }}-service"
+spec:
+  selector:
+    app: {{ .Values.user.name }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.user.port }}
+      targetPort: {{ .Values.user.port }}
+      name: "tcp-{{ .Values.user.port }}"
+      nodePort: {{ .Values.user.service.nodePort }}
+  type: NodePort

@@ -1,0 +1,16 @@
+# service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: "{{ .Values.chat.name }}-service"
+spec:
+  selector:
+    app: {{ .Values.chat.name }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.chat.port }}
+      targetPort: {{ .Values.chat.port }}
+      name: "tcp-{{ .Values.chat.port }}"
+      nodePort: {{ .Values.chat.service.nodePort }}
+  type: NodePort

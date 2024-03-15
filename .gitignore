@@ -2,5 +2,4 @@
 go.work
 go.work.sum
 lavinmq
-messageBrokerSetup
-postgres
+.*

@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.user.name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.user.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.user.name }}
+    spec:
+      containers:
+      - name: {{ .Values.user.name }}
+        image: "{{ .Values.user.deployment.image }}:{{ .Values.user.deployment.imageVersion }}"
+        ports:
+        - containerPort: {{ .Values.user.port }}
+        env:
+        - name: chatHost
+          value: "localhost"
+        - name: chatPort
+          value: "{{ .Values.chat.service.nodePort }}"

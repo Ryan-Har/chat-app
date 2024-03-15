@@ -1,0 +1,15 @@
+# service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: "{{ .Values.api.name }}-service"
+spec:
+  selector:
+    app: {{ .Values.api.name }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.api.port }}
+      targetPort: {{ .Values.api.port }}
+      name: "tcp-{{ .Values.api.port }}"
+  type: ClusterIP

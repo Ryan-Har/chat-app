@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.consumer.name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.consumer.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.consumer.name }}
+    spec:
+      containers:
+      - name: {{ .Values.consumer.name }}
+        image: "{{ .Values.consumer.deployment.image }}:{{ .Values.consumer.deployment.imageVersion }}"
+        env:
+        - name: lavinmqHost
+          value: "{{ .Values.lavinmq.name }}-service"
+        - name: lavinmqPort
+          value: "{{ .Values.lavinmq.port }}"
+        - name: apiHost
+          value: "{{ .Values.api.name }}-service"
+        - name: apiPort
+          value: "{{ .Values.api.port }}"
