@@ -3,7 +3,7 @@ api:
   port: 8001
   deployment:
     image: pandects/chat-app-api
-    imageVersion: 1.01
+    imageVersion: 1.02
 
 app:
   name: app
