@@ -1,4 +1,4 @@
-module consumer
+module github.com/Ryan-Har/chat-app/src/consumer
 
 go 1.22.0
 

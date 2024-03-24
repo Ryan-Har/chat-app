@@ -1,4 +1,4 @@
-module main
+module github.com/Ryan-Har/chat-app/src/app
 
 go 1.22.0
 

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Ryan-Har/chat-app/src/api/dbquery"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
@@ -29,7 +30,7 @@ type idResponse struct {
 }
 
 // responds with user information of added user
-func addExternalUser(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandler) {
+func addExternalUser(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQueryHandler) {
 	enableCors(&w)
 	respondJson(&w)
 
@@ -70,7 +71,7 @@ func addExternalUser(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandler
 }
 
 // responds with user information of added user, if exists
-func getExternalUser(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandler) {
+func getExternalUser(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQueryHandler) {
 	enableCors(&w)
 	respondJson(&w)
 
@@ -111,7 +112,7 @@ func getExternalUser(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandler
 
 }
 
-func getExternalUserByID(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandler) {
+func getExternalUserByID(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQueryHandler) {
 	enableCors(&w)
 	respondJson(&w)
 
@@ -152,7 +153,7 @@ func getExternalUserByID(w http.ResponseWriter, r *http.Request, dbqh DBQueryHan
 	}
 }
 
-func updateExternalUserByID(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandler) {
+func updateExternalUserByID(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQueryHandler) {
 	enableCors(&w)
 	respondJson(&w)
 
@@ -203,7 +204,7 @@ func updateExternalUserByID(w http.ResponseWriter, r *http.Request, dbqh DBQuery
 
 }
 
-func updateChatStatus(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandler) {
+func updateChatStatus(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQueryHandler) {
 
 	var cut *ChatUuidTime
 	err := json.NewDecoder(r.Body).Decode(&cut)
@@ -231,7 +232,7 @@ func updateChatStatus(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandle
 	}
 }
 
-func addInternalUser(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandler) {
+func addInternalUser(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQueryHandler) {
 	enableCors(&w)
 	respondJson(&w)
 
@@ -272,7 +273,7 @@ func addInternalUser(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandler
 	}
 }
 
-func getInternalUserByID(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandler) {
+func getInternalUserByID(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQueryHandler) {
 	enableCors(&w)
 	respondJson(&w)
 
@@ -311,7 +312,7 @@ func getInternalUserByID(w http.ResponseWriter, r *http.Request, dbqh DBQueryHan
 	}
 }
 
-func updateInternalUserByID(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandler) {
+func updateInternalUserByID(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQueryHandler) {
 	enableCors(&w)
 	respondJson(&w)
 
@@ -361,7 +362,7 @@ func updateInternalUserByID(w http.ResponseWriter, r *http.Request, dbqh DBQuery
 
 }
 
-func addMessage(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandler) {
+func addMessage(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQueryHandler) {
 	enableCors(&w)
 	respondJson(&w)
 
@@ -381,7 +382,7 @@ func addMessage(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandler) {
 	}
 }
 
-func getAllMessages(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandler) {
+func getAllMessages(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQueryHandler) {
 	enableCors(&w)
 	respondJson(&w)
 
@@ -417,7 +418,7 @@ func getAllMessages(w http.ResponseWriter, r *http.Request, dbqh DBQueryHandler)
 	}
 }
 
-func getChatsInProgress(w http.ResponseWriter, dbqh DBQueryHandler) {
+func getChatsInProgress(w http.ResponseWriter, dbqh dbquery.DBQueryHandler) {
 	enableCors(&w)
 	respondJson(&w)
 
@@ -572,7 +573,7 @@ func main() {
 	var dbhost string = os.Getenv("dbhost")
 	var dbport string = os.Getenv("dbport")
 
-	dbQueryHandler, err := NewPostgresHandler(PostgresDBConfig{
+	dbQueryHandler, err := dbquery.NewPostgresHandler(dbquery.PostgresDBConfig{
 		DBUser:     dbuser,
 		DBPassword: dbpassword,
 		DBName:     dbname,
