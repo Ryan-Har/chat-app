@@ -49,18 +49,20 @@ jobs:
         run: |
           cd $WORKING_DIR/src
           for module in $(find . -mindepth 1 -maxdepth 1 -type d | sed 's/^\.\///'); do
-            cd "$module"
-            for submodule in $(find . -mindepth 1 -maxdepth 1 -type d -not *web*); do
-              cd $WORKING_DIR/src/$module/$submodule
-              if [ -f *_test.go ]; then
+            cd $module
+            for submodule in $(find . -mindepth 1 -maxdepth 1 -type d -not -name *web*); do
+              cd $submodule
+              if [ -f *_test.go ]
+              then
                 go test
               fi
               cd ..
             done
-            if [ -f *_test.go ]; then
+            if [ -f *_test.go ]
+            then
                 go test
             fi
-            if [ -f Dockerfile]; then
+            if [ -f Dockerfile ]; then
               docker build -t pandects/"$module":${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }} .
             fi
             cd ..
