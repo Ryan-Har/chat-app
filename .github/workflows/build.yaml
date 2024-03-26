@@ -56,6 +56,7 @@ jobs:
                 go test
               fi
               cd ..
+            done
             if [ -f *_test.go ]; then
                 go test
             fi
