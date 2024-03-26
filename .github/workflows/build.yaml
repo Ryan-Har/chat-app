@@ -36,17 +36,18 @@ jobs:
           done
 
       - name: Install MockGen
-        run: go get github.com/golang/mock/mockgen@latest
+        run: |
+          cd $WORKING_DIR/src/api
+          go get github.com/golang/mock/mockgen@latest
 
       - name: Create dbquery handler mocks
         run: |
           cd $WORKING_DIR/src/api
           mockgen -destination=mocks/db_mock.go github.com/Ryan-Har/chat-app/src/api/dbquery DBQueryHandler
-          cd $WORKING_DIRsrc
 
       - name: Run tests and build Docker containers
         run: |
-          cd $WORKING_DIRsrc
+          cd $WORKING_DIR/src
           for module in $(find . -mindepth 1 -maxdepth 1 -type d); do
             cd "$module"
             for submodule in $(find . -mindepth 1 -maxdepth 1 -type d -not *web*); do
