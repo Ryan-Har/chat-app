@@ -1,6 +1,6 @@
 module github.com/Ryan-Har/chat-app/src/api
 
-go 1.22.0
+go 1.22
 
 require (
 	github.com/golang/mock v1.6.0
