@@ -54,8 +54,8 @@ jobs:
               cd $WORKING_DIR/src/$module/$submodule
               if [ -f *_test.go ]; then
                 go test
-                cd ..
               fi
+              cd ..
             if [ -f *_test.go ]; then
                 go test
             fi
