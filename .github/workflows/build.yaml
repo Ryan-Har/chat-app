@@ -61,7 +61,7 @@ jobs:
                 go test
             fi
             if [ -f Dockerfile]; then
-              docker build -t pandects/$module:${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }} .
+              docker build -t pandects/"$module":${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }} .
             fi
             cd ..
           done
@@ -93,7 +93,7 @@ jobs:
           for module in $(find . -mindepth 1 -maxdepth 1 -type d); do
             cd $module
             if [ -f Dockerfile ]; then
-              docker push pandects/$module:${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}
+              docker push pandects/"$module":${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}
             fi
             cd ..
           done
