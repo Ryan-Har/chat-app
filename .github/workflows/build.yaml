@@ -77,7 +77,7 @@ jobs:
 
       - name: Deploy to Kind cluster
         run: |
-          kubectl config use-context ${{ github.run_number }}
+          kubectl config use-context kind-${{ github.run_number }}
           helm install chat-app helm/ -f helm/values.yaml
 
       - name: Wait 60 seconds before integration tests
