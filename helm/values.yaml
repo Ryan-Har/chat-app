@@ -3,14 +3,14 @@ api:
   port: 8001
   deployment:
     image: pandects/chat-app-api
-    imageVersion: {{ .Chart.appVersion }}
+    imageVersion: "{{ .Chart.appVersion }}"
 
 app:
   name: app
   port: 8005
   deployment:
     image: pandects/chat-app-app
-    imageVersion: {{ .Chart.appVersion }}
+    imageVersion: "{{ .Chart.appVersion }}"
   service:
     nodePort: 30005
 
@@ -19,7 +19,7 @@ chat:
   port: 8002
   deployment:
     image: pandects/chat-app-chat
-    imageVersion: {{ .Chart.appVersion }}
+    imageVersion: "{{ .Chart.appVersion }}"
   service:
     nodePort: 30002
 
@@ -27,7 +27,7 @@ consumer:
   name: consumer
   deployment:
     image: pandects/chat-app-consumer
-    imageVersion: {{ .Chart.appVersion }}
+    imageVersion: "{{ .Chart.appVersion }}"
 
 lavinmq:
   name: lavinmq
@@ -44,7 +44,7 @@ user:
   port: 8080
   deployment:
     image: pandects/chat-app-user
-    imageVersion: {{ .Chart.appVersion }}
+    imageVersion: "{{ .Chart.appVersion }}"
   service:
     nodePort: 30080
 
