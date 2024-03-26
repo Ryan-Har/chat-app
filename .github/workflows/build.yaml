@@ -60,7 +60,7 @@ jobs:
                 go test
             fi
             if [ -f Dockerfile]; then
-              docker build -t pandects/$module:$MAJOR_RELEASE.$MINOR_RELEASE.${{ github.run_number }} .
+              docker build -t pandects/$module:${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }} .
             fi
             cd ..
           done
@@ -72,7 +72,7 @@ jobs:
       - name: Update Helm chart values
         run: |
           cd $WORKING_DIR
-          sed -i 's/^appVersion: .*/appVersion: "$MAJOR_RELEASE.$MINOR_RELEASE.${{ github.run_number }}"/' ./helm/Chart.yaml
+          sed -i 's/^appVersion: .*/appVersion: "${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}"/' ./helm/Chart.yaml
 
       - name: Deploy to Kind cluster
         run: |
@@ -92,7 +92,7 @@ jobs:
           for module in $(find . -mindepth 1 -maxdepth 1 -type d); do
             cd $module
             if [ -f Dockerfile ]; then
-              docker push pandects/$module:$MAJOR_RELEASE.$MINOR_RELEASE.${{ github.run_number }}
+              docker push pandects/$module:${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}
             fi
             cd ..
           done
@@ -113,8 +113,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
         with:
-          tag_name: $MAJOR_RELEASE.$MINOR_RELEASE.${{ github.run_number }}
-          release_name: Chat app $MAJOR_RELEASE.$MINOR_RELEASE.${{ github.run_number }}
+          tag_name: ${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}
+          release_name: Chat app ${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}
           body: |  # Optional release description
             This is a test release.
 
