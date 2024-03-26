@@ -75,11 +75,15 @@ jobs:
           cd $WORKING_DIR
           sed -i 's/^version: .*/version: "${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}"/' ./helm/Chart.yaml
 
-
       - name: Deploy to Kind cluster
         run: |
           kubectl config use-context kind-${{ github.run_number }}
-          helm install chat-app helm/ -f helm/values.yaml
+          helm install chat-app helm/ -f helm/values.yaml \
+          --set api.deployment.imageVersion="${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}" \
+          --set app.deployment.imageVersion="${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}" \
+          --set chat.deployment.imageVersion="${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}" \
+          --set consumer.deployment.imageVersion="${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}" \
+          --set user.deployment.imageVersion="${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}" \
 
       - name: Wait 60 seconds before integration tests
         run: sleep 60s
