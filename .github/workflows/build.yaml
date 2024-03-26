@@ -113,7 +113,7 @@ jobs:
       - name: Upload Helm Chart Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: helm-chart 
+          name: helm-chart
           path: helm-chart.tgz
 
       - name: Create GitHub Release
@@ -128,7 +128,7 @@ jobs:
 
       - name: Upload Artifact as Release Asset
         run: |
-          gh release upload ${{ github.sha }} helm-chart.tgz --name helm-chart.tgz 
+          gh release upload ${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }} helm-chart.tgz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
