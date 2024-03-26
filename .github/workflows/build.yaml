@@ -26,13 +26,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd $WORKING_DIR/$REPO_NAME/src
+          cd $WORKING_DIR/src
           for module in $(find . -mindepth 1 -maxdepth 1 -type d); do
-            cd $WORKING_DIR/$REPO_NAME/$module
+            cd $module
             if [ -f go.mod ]; then
               go mod download
             fi
-            cd $WORKING_DIR/$REPO_NAME/src
+            cd ..
           done
 
       - name: Install MockGen
@@ -40,17 +40,17 @@ jobs:
 
       - name: Create dbquery handler mocks
         run: |
-          cd $WORKING_DIR/$REPO_NAME/src/api
+          cd $WORKING_DIR/src/api
           mockgen -destination=mocks/db_mock.go github.com/Ryan-Har/chat-app/src/api/dbquery DBQueryHandler
-          cd $WORKING_DIR/$REPO_NAME/src
+          cd $WORKING_DIRsrc
 
       - name: Run tests and build Docker containers
         run: |
-          cd $WORKING_DIR/$REPO_NAME/src
+          cd $WORKING_DIRsrc
           for module in $(find . -mindepth 1 -maxdepth 1 -type d); do
             cd "$module"
             for submodule in $(find . -mindepth 1 -maxdepth 1 -type d -not *web*); do
-              cd $WORKING_DIR/$REPO_NAME/src/$module/$submodule
+              cd $WORKING_DIR/src/$module/$submodule
               if [ -f *_test.go ]; then
                 go test
                 cd ..
@@ -70,7 +70,7 @@ jobs:
 
       - name: Update Helm chart values
         run: |
-          cd $WORKING_DIR/$REPO_NAME
+          cd $WORKING_DIR
           sed -i 's/^appVersion: .*/appVersion: "$MAJOR_RELEASE.$MINOR_RELEASE.${{ github.run_number }}"/' ./helm/Chart.yaml
 
       - name: Deploy to Kind cluster
@@ -87,7 +87,7 @@ jobs:
 
       - name: Push Docker containers to Docker Hub
         run: |
-          cd $WORKING_DIR/$REPO_NAME/src
+          cd $WORKING_DIR/src
           for module in $(find . -mindepth 1 -maxdepth 1 -type d); do
             cd $module
             if [ -f Dockerfile ]; then
@@ -98,28 +98,28 @@ jobs:
 
       - name: Package Helm Chart (excluding folder/file)
         run: |
-          cd cd $WORKING_DIR/$REPO_NAME
+          cd $WORKING_DIR
           tar -cf helm-chart.tgz ./helm
           
       - name: Upload Helm Chart Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: helm-chart  # Artifact name
-          path: helm-chart.tgz  # Path to your packaged Helm chart (excluding folder/file)
+          name: helm-chart 
+          path: helm-chart.tgz
 
       - name: Create GitHub Release
         uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Access token with repo:write scope
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
         with:
-          tag_name: $MAJOR_RELEASE.$MINOR_RELEASE.${{ github.run_number }}  # Use commit SHA for versioning
-          release_name: Chat app $MAJOR_RELEASE.$MINOR_RELEASE.${{ github.run_number }}  # Descriptive release name
+          tag_name: $MAJOR_RELEASE.$MINOR_RELEASE.${{ github.run_number }}
+          release_name: Chat app $MAJOR_RELEASE.$MINOR_RELEASE.${{ github.run_number }}
           body: |  # Optional release description
             This is a test release.
 
       - name: Upload Artifact as Release Asset
         run: |
-          gh release upload ${{ github.sha }} my-chart.tgz --name my-chart.tgz  # You can use a different asset name if needed
+          gh release upload ${{ github.sha }} helm-chart.tgz --name helm-chart.tgz 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
