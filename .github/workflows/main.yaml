@@ -1,0 +1,140 @@
+name: Build and Deploy
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+jobs:
+  build_and_create_release:
+    if: github.event.pull_request.merged == true
+    runs-on: self-hosted
+
+    env:
+      WORKING_DIR: ${{ github.workspace }}
+      REPO_NAME: ${{ github.repository }}
+      MAJOR_RELEASE: 1
+      MINOR_RELEASE: 1
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+
+      - name: Install dependencies
+        run: |
+          cd $WORKING_DIR/src
+          for module in $(find . -mindepth 1 -maxdepth 1 -type d); do
+            cd $module
+            if [ -f go.mod ]; then
+              go mod download
+            fi
+            cd ..
+          done
+
+      - name: Install MockGen
+        run: |
+          cd $WORKING_DIR/src/api
+          go get github.com/golang/mock/mockgen@latest
+
+      - name: Create dbquery handler mocks
+        run: |
+          cd $WORKING_DIR/src/api
+          mockgen -destination=mocks/db_mock.go github.com/Ryan-Har/chat-app/src/api/dbquery DBQueryHandler
+
+      - name: Run tests and build Docker containers
+        run: |
+          cd $WORKING_DIR/src
+          for module in $(find . -mindepth 1 -maxdepth 1 -type d | sed 's/^\.\///'); do
+            cd $module
+            for submodule in $(find . -mindepth 1 -maxdepth 1 -type d -not -name *web*); do
+              cd $submodule
+              if [ -f *_test.go ]
+              then
+                go test
+              fi
+              cd ..
+            done
+            if [ -f *_test.go ]
+            then
+                go test
+            fi
+            if [ -f Dockerfile ]; then
+              docker build -t pandects/"$module":${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }} .
+            fi
+            cd ..
+          done
+
+      - name: Setup Kind cluster
+        run: |
+          kind create cluster --name ${{ github.run_number }} --wait 5m
+
+      - name: Update Helm chart values
+        run: |
+          cd $WORKING_DIR
+          sed -i 's/^version: .*/version: "${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}"/' ./helm/Chart.yaml
+
+      - name: Deploy to Kind cluster
+        run: |
+          kubectl config use-context kind-${{ github.run_number }}
+          helm install chat-app helm/ -f helm/values.yaml \
+          --set api.deployment.imageVersion="${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}" \
+          --set app.deployment.imageVersion="${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}" \
+          --set chat.deployment.imageVersion="${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}" \
+          --set consumer.deployment.imageVersion="${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}" \
+          --set user.deployment.imageVersion="${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}" \
+
+      - name: Wait 60 seconds before integration tests
+        run: sleep 60s
+
+      - name: Run integration tests
+        run: |
+          echo "TODO: placeholder for now"
+
+      - name: Push Docker containers to Docker Hub
+        run: |
+          cd $WORKING_DIR/src
+          for module in $(find . -mindepth 1 -maxdepth 1 -type d | sed 's/^\.\///'); do
+            cd $module
+            if [ -f Dockerfile ]; then
+              docker push pandects/"$module":${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}
+            fi
+            cd ..
+          done
+
+      - name: Package Helm Chart (excluding folder/file)
+        run: |
+          cd $WORKING_DIR
+          tar -cf helm-chart.tgz ./helm
+          
+      - name: Upload Helm Chart Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-chart
+          path: helm-chart.tgz
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        with:
+          tag_name: ${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}
+          release_name: Chat app ${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}
+          body: |  # Optional release description
+            This is a test release.
+
+      - name: Upload Artifact as Release Asset
+        run: |
+          gh release upload ${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }} helm-chart.tgz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup
+        if: always()
+        run: |
+          kind delete cluster --name ${{ github.run_number }}
