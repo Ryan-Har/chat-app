@@ -1,12 +1,14 @@
 name: Build and Deploy
 
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches:
-      - refactor-test
+      - main
 
 jobs:
-  build_and_deploy:
+  build_and_create_release:
+    if: github.event.pull_request.merged == true
     runs-on: self-hosted
 
     env:
@@ -133,5 +135,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cleanup
+        if: always()
         run: |
           kind delete cluster --name ${{ github.run_number }}
