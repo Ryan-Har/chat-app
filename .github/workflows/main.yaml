@@ -34,18 +34,19 @@ jobs:
       
       - name: Check PR source branch
         id: check_source
-        run: echo "::set-output name=source::${GITHUB_EVENT_PATH}"
+        run: echo "::set-output name=source::${{ github.HEAD_REF }}"
 
       - name: Execute job based on origin
         id: execute_job
         run: |
-          if [[ "$(echo ${{ steps.check_source.outputs.source }} | jq '.pull_request.head.ref')" == "\"feature-"* ]]; then
+          branch_name="${{ steps.check_source.outputs.source }}"
+          if [[ $branch_name == feature-* ]]; then
             echo "This PR originated from a feature branch."
             echo "::set-output name=job_type::feature"
-          elif [[ "$(echo ${{ steps.check_source.outputs.source }} | jq '.pull_request.head.ref')" == "\"patch-"* ]]; then
+          elif [[ $branch_name == patch-* ]]; then
             echo "This PR originated from a patch branch."
             echo "::set-output name=job_type::patch"
-          elif [[ "$(echo ${{ steps.check_source.outputs.source }} | jq '.pull_request.head.ref')" == "\"upgrade-"* ]]; then
+          elif [[ $branch_name == upgrade-* ]]; then
             echo "This PR originated from an upgrade branch."
             echo "::set-output name=job_type::upgrade"
           else
