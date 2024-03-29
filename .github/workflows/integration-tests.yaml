@@ -48,7 +48,7 @@ jobs:
           --set app.deployment.imageVersion=testing" \
           --set chat.deployment.imageVersion=testing \
           --set consumer.deployment.imageVersion=testing \
-          --set user.deployment.imageVersion=testing \
+          --set user.deployment.imageVersion=testing
 
       - name: Wait 60 seconds before integration tests
         run: sleep 60s
