@@ -21,7 +21,10 @@ RUN mkdir /app
 # Copy the built binary
 COPY --from=builder /go/src/app/main /app
 
-ADD web /app/web
+ADD css /app/css
+ADD js /app/js
+ADD templates /app/templates
+#ADD web /app/web
 
 # Set working directory
 WORKDIR /app

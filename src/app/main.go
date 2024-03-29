@@ -235,34 +235,54 @@ func streamChats(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func main() {
-	data := struct {
-		ChatHost string
-		ChatPort string
-	}{
-		ChatHost: os.Getenv("chatHost"),
-		ChatPort: os.Getenv("chatPort"),
-	}
+func loginPage(w http.ResponseWriter, r *http.Request) {
 
-	tmpl, err := template.ParseFiles("web/index.html")
+	tmpl := template.Must(template.ParseFiles("templates/base.html", "templates/login.html"))
+
+	err := tmpl.ExecuteTemplate(w, "base.html", map[string]interface{}{
+		"Title":    "Login Page",
+		"ChatHost": os.Getenv("chatHost"),
+		"ChatPort": os.Getenv("chatPort"),
+	})
 	if err != nil {
-		panic(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+}
+
+func chatsPage(w http.ResponseWriter, r *http.Request) {
+
+	tmpl := template.Must(template.ParseFiles("templates/base.html", "templates/navbar.html", "templates/chats.html"))
+
+	err := tmpl.ExecuteTemplate(w, "base.html", map[string]interface{}{
+		"Title":    "Chats Page",
+		"ChatHost": os.Getenv("chatHost"),
+		"ChatPort": os.Getenv("chatPort"),
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func main() {
 
 	if err := oc.populateFromDB(); err != nil {
 		log.Println("error populating from db", err.Error())
 	}
 	go workerManager()
 	// Handle the root URL
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Execute the template, passing in the data
-		err := tmpl.Execute(w, data)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	})
-	http.Handle("/web/", http.StripPrefix("/web/", http.FileServer(http.Dir("web"))))
-	http.HandleFunc("/chats", streamChats)
+
+	//serve js and css files
+	cssfs := http.FileServer(http.Dir("css"))
+	http.Handle("/css/", http.StripPrefix("/css/", cssfs))
+
+	jsfs := http.FileServer(http.Dir("js"))
+	http.Handle("/js/", http.StripPrefix("/js/", jsfs))
+
+	//http.Handle("/login", http.StripPrefix("/web/", http.FileServer(http.Dir("web"))))
+	http.HandleFunc("/chatsstream", streamChats)
+	http.HandleFunc("/chats", chatsPage)
+	http.HandleFunc("/login", loginPage)
 	http.ListenAndServe(":8005", nil)
 }
