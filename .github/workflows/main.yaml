@@ -118,8 +118,8 @@ jobs:
           for module in $(find . -mindepth 1 -maxdepth 1 -type d | sed 's/^\.\///'); do
             cd $module
             if [ -f Dockerfile ]; then
-              docker build -t pandects/"$module":"${{ steps.Get_version_number.outputs.version }}" -t pandects/"$module":latest .
-              docker push pandects/"$module":${{ steps.Get_version_number.outputs.version }} && docker push pandects/"$module":latest
+              docker build -t pandects/"$module":"${{ needs[matrix.needs_job].outputs.version }}" -t pandects/"$module":latest .
+              docker push pandects/"$module":$${{ needs[matrix.needs_job].outputs.version }} && docker push pandects/"$module":latest
             fi
             cd ..
           done
@@ -157,5 +157,5 @@ jobs:
         if: always()
         run: |
           cd $WORKING_DIR
-          rf -rf chat-ap-helm
+          rm -rf chat-ap-helm
           
