@@ -1,4 +1,4 @@
-name: Common Workflow
+name: unit-tests
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
 jobs:
   unit-tests:
     runs-on: self-hosted
-    
+
     env:
       WORKING_DIR: ${{ github.workspace }}
       REPO_NAME: ${{ github.repository }}
