@@ -1,21 +1,49 @@
 name: Upgrade Branch Workflow
 
 on:
-  push:
+  pull_request:
     branches:
-      - 'upgrade-*'
+      - from: 'upgrade-*'
+    types: [opened, edited, reopened]
 
 jobs:
   upgrade-job:
     runs-on: self-hosted
-    needs: unit-tests
 
     env:
       WORKING_DIR: ${{ github.workspace }}
       REPO_NAME: ${{ github.repository }}
 
     steps:
-      # Add any additional steps specific to upgrade branches
+      - name: Checkout code
+        uses: actions/checkout@v2
+      
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+
+      - name: Install dependencies
+        run: |
+          cd $WORKING_DIR/src
+          for module in $(find . -mindepth 1 -maxdepth 1 -type d); do
+            cd $module
+            if [ -f go.mod ]; then
+              go mod download
+            fi
+            cd ..
+          done
+
+      - name: Build Docker containers
+        run: |
+          cd $WORKING_DIR/src
+          for module in $(find . -mindepth 1 -maxdepth 1 -type d | sed 's/^\.\///'); do
+            if [ -f Dockerfile ]; then
+              docker build -t pandects/"$module":${{ github.sha }} .
+            fi
+            cd ..
+          done
+
       - name: Run upgrade-specific commands
         run: echo "This is a upgrade branch"
 
