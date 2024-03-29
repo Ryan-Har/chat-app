@@ -4,7 +4,10 @@ on:
   pull_request:
     branches:
       - from: 'feature-*'
-    types: [opened, edited, reopened]
+    types:
+      - opened
+      - edited
+      - reopened
 
 jobs:
   feature-job:
