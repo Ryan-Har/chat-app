@@ -2,4 +2,7 @@
 go.work
 go.work.sum
 lavinmq
+chat-app-helm
 .*
+!.gitignore
+!.github

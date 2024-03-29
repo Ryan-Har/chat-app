@@ -1,0 +1,69 @@
+name: unit-tests
+
+on:
+  push:
+    branches:
+      - 'feature-*'
+      - 'patch-*'
+      - 'upgrade-*'
+
+jobs:
+  unit-tests:
+    runs-on: self-hosted
+
+    env:
+      WORKING_DIR: ${{ github.workspace }}
+      REPO_NAME: ${{ github.repository }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+
+      - name: Install dependencies
+        run: |
+          cd $WORKING_DIR/src
+          for module in $(find . -mindepth 1 -maxdepth 1 -type d); do
+            cd $module
+            if [ -f go.mod ]; then
+              go mod download
+            fi
+            cd ..
+          done
+
+      - name: Install MockGen
+        run: |
+          cd $WORKING_DIR/src/api
+          go get github.com/golang/mock/mockgen@latest
+
+      - name: Create dbquery handler mocks
+        run: |
+          cd $WORKING_DIR/src/api
+          mockgen -destination=mocks/db_mock.go github.com/Ryan-Har/chat-app/src/api/dbquery DBQueryHandler
+
+      - name: Run tests and build Docker containers
+        run: |
+          cd $WORKING_DIR/src
+          for module in $(find . -mindepth 1 -maxdepth 1 -type d | sed 's/^\.\///'); do
+            cd $module
+            for submodule in $(find . -mindepth 1 -maxdepth 1 -type d -not -name *web*); do
+              cd $submodule
+              if [ -f *_test.go ]
+              then
+                go test
+              fi
+              cd ..
+            done
+            if [ -f *_test.go ]
+            then
+                go test
+            fi
+            if [ -f Dockerfile ]; then
+              docker build -t pandects/"$module":${{ github.sha }} .
+            fi
+            cd ..
+          done

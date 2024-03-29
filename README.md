@@ -18,9 +18,8 @@ This is a simple chat application written in Golang, designed for real-time comm
 ## Getting Started
 
 ```
-git clone https://github.com/Ryan-Har/chat-app
-cd chat app
-helm install chat-app helm/ -f helm/values.yaml
+helm pull oci://registry-1.docker.io/pandects/chat-app-helm --untar
+helm install chat-app chat-app-helm/ -f chat-app-helm/values.yaml
 ```
 
 The user interface can be accessed from http://localhost:30080 <br>

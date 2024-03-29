@@ -1,0 +1,63 @@
+name: Pull request workflow
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+
+jobs:
+  integration-tests:
+    runs-on: self-hosted
+
+    env:
+      WORKING_DIR: ${{ github.workspace }}
+      REPO_NAME: ${{ github.repository }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      
+      - name: Build Docker containers
+        run: |
+          cd $WORKING_DIR/src
+          for module in $(find . -mindepth 1 -maxdepth 1 -type d | sed 's/^\.\///'); do
+            if [ -f Dockerfile ]; then
+              docker build -t pandects/"$module":${{ github.sha }} .
+            fi
+            cd ..
+          done
+
+      - name: Pull current helm chart
+        run: |
+          cd $WORKING_DIR
+          helm pull oci://registry-1.docker.io/pandects/chat-app-helm --untar
+      
+      - name: Setup Kind cluster
+        run: |
+          kind create cluster --name ${{ github.sha }} --wait 5m
+
+      - name: Deploy to kind cluster
+        run: |
+          kubectl config use-context kind-${{ github.sha }}
+          helm install chat-app chat-app-helm/ -f chat-app-helm/values.yaml \
+          --set api.deployment.imageVersion=testing \
+          --set app.deployment.imageVersion=testing \
+          --set chat.deployment.imageVersion=testing \
+          --set consumer.deployment.imageVersion=testing \
+          --set user.deployment.imageVersion=testing
+
+      - name: Wait 60 seconds before integration tests
+        run: sleep 60s
+
+      - name: Run integration tests
+        run: |
+          echo "TODO: placeholder for now"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          kind delete cluster --name ${{ github.sha }}
