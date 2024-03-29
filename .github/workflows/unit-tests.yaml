@@ -10,9 +10,7 @@ on:
 jobs:
   unit-tests:
     runs-on: self-hosted
-    outputs:
-      workflow-complete: ${{ steps.complete.outputs.artifact_id }}
-
+    
     env:
       WORKING_DIR: ${{ github.workspace }}
       REPO_NAME: ${{ github.repository }}
