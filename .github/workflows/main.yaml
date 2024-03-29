@@ -56,7 +56,7 @@ jobs:
   patch:
     needs: check-merge
     runs-on: self-hosted
-    if: ${{ steps.check-merge.outputs.execute_job == 'patch' }}
+    if: ${{ jobs.check-merge.outputs.execute_job == 'patch' }}
     steps:
       - name: Generate version number
         run: |
@@ -67,7 +67,7 @@ jobs:
   feature:
     needs: check-merge
     runs-on: self-hosted
-    if: ${{ steps.check-merge.outputs.execute_job == 'feature' }}
+    if: ${{ jobs.check-merge.outputs.execute_job == 'feature' }}
     steps:
       - name: Generate version number
         run: |
@@ -79,7 +79,7 @@ jobs:
   upgrade:
     needs: check-merge
     runs-on: self-hosted
-    if: ${{ steps.check-merge.outputs.execute_job == 'upgrade' }}
+    if: ${{ jobs.check-merge.outputs.execute_job == 'upgrade' }}
     steps:
       - name: Generate version number
         run: |
