@@ -1,0 +1,115 @@
+name: Build and Deploy
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+jobs:
+  Build-and-deploy:
+    if: github.event.pull_request.merged == true
+    runs-on: self-hosted
+
+    env:
+      WORKING_DIR: ${{ github.workspace }}
+      REPO_NAME: ${{ github.repository }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+
+      - name: Pull current helm chart
+        run: |
+          cd $WORKING_DIR
+          helm pull oci://registry-1.docker.io/pandects/chat-app-helm --untar
+      
+      - name: Check PR source branch
+        id: check_source
+        run: echo "source=${{ github.HEAD_REF }}" >> $GITHUB_ENV
+
+      - name: Set version
+        id: execute_job
+        run: |
+          cd $WORKING_DIR/chat-app-helm
+          if [[ $source == feature-* ]]; then
+            echo "This PR originated from a feature branch."
+            IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
+            minor=$((minor + 1))
+            patch=0
+            echo version=$major.$minor.$patch >> $GITHUB_ENV
+          elif [[ $source == patch-* ]]; then
+            echo "This PR originated from a patch branch."
+            IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
+            patch=$((patch + 1))
+            echo version=$major.$minor.$patch >> $GITHUB_ENV
+          elif [[ $source == upgrade-* ]]; then
+            echo "This PR originated from an upgrade branch."
+            IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
+            ((major++))
+            minor=0
+            patch=0
+            echo version=$major.$minor.$patch >> $GITHUB_ENV
+          else
+            echo "Unknown source branch."
+            exit 1
+          fi
+
+      - name: Update Helm chart values
+        run: |
+          cd $WORKING_DIR/chat-app-helm
+          for img in $(echo api app chat consumer user); do yq -i ".${img}.deployment.imageVersion = \"$version\"" values.yaml; done
+          yq -i ".version = \"$version\" | .appVersion = \"$version\"" Chart.yaml
+
+      - name: Build Docker containers, tag and push
+        run: |
+          cd $WORKING_DIR/src
+          for module in $(find . -mindepth 1 -maxdepth 1 -type d | sed 's/^\.\///'); do
+            cd $module
+            if [ -f Dockerfile ]; then
+              docker build -t pandects/"$module":$version -t pandects/"$module":latest .
+              docker push pandects/"$module":$version && docker push pandects/"$module":latest
+            fi
+            cd ..
+          done
+
+      - name: Package Helm Chart
+        run: |
+          cd $WORKING_DIR
+          helm package chat-app-helm
+
+      - name: Push Helm Chart
+        run: |
+          helm push ./chat-app-helm-$version.tgz oci://registry-1.docker.io/pandects
+
+      - name: Upload Helm Chart Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chat-app-helm-${{ env.version }}.tgz
+          path: chat-app-helm-${{ env.version }}.tgz
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        with:
+          tag_name: ${{ env.version }}
+          release_name: Chat app v${{ env.version }}
+
+      - name: Upload Artifact as Release Asset
+        run: |
+          gh release upload $version chat-app-helm-$version.tgz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup
+        if: always()
+        run: |
+          cd $WORKING_DIR
+          rm -rf chat-ap-helm
+          
