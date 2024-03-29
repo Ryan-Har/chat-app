@@ -45,7 +45,7 @@ jobs:
           kubectl config use-context kind-${{ github.sha }}
           helm install chat-app chat-app-helm/ -f chat-app-helm/values.yaml \
           --set api.deployment.imageVersion=testing \
-          --set app.deployment.imageVersion=testing" \
+          --set app.deployment.imageVersion=testing \
           --set chat.deployment.imageVersion=testing \
           --set consumer.deployment.imageVersion=testing \
           --set user.deployment.imageVersion=testing
