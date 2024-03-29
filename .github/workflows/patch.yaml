@@ -6,7 +6,7 @@ on:
 jobs:
   patch-job:
     runs-on: self-hosted
-    needs: common-job
+    needs: unit-tests
 
     env:
       WORKING_DIR: ${{ github.workspace }}

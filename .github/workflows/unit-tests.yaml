@@ -69,7 +69,3 @@ jobs:
             fi
             cd ..
           done
-
-      - name: Mark workflow as complete
-        id: complete
-        run: echo "::set-output name=artifact_id::complete"

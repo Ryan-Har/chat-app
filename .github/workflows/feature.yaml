@@ -8,7 +8,7 @@ on:
 jobs:
   feature-job:
     runs-on: self-hosted
-    needs: common-job
+    needs: unit-tests
 
     env:
       WORKING_DIR: ${{ github.workspace }}
