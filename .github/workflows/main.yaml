@@ -19,9 +19,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: yq - portable yaml processor
-        uses: mikefarah/yq@v4.43.1
-
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
@@ -100,6 +97,9 @@ jobs:
         - upgrade
     
     steps:
+      - name: yq - portable yaml processor
+        uses: mikefarah/yq@v4.43.1
+
       - name: Get version number
         run: |
           echo "::set-output name=version::${{ needs[matrix.needs_job].outputs.version }}"
