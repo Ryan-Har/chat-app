@@ -1,0 +1,49 @@
+on:
+  push:
+    branches:
+      - 'upgrade-*'
+
+jobs:
+  upgrade-job:
+    runs-on: self-hosted
+    needs: common-job
+
+    env:
+      WORKING_DIR: ${{ github.workspace }}
+      REPO_NAME: ${{ github.repository }}
+
+    steps:
+      # Add any additional steps specific to upgrade branches
+      - name: Run upgrade-specific commands
+        run: echo "This is a upgrade branch"
+
+      - name: Pull current helm chart
+        run: |
+          cd $WORKING_DIR
+          helm pull oci://registry-1.docker.io/pandects/chat-app-helm --untar
+      
+      - name: Setup Kind cluster
+        run: |
+          kind create cluster --name ${{ github.sha }} --wait 5m
+
+      - name: Deploy to kind cluster
+        run: |
+          kubectl config use-context kind-${{ github.sha }}
+          helm install chat-app chat-app-helm/ -f chat-app-helm/values.yaml \
+          --set api.deployment.imageVersion=testing \
+          --set app.deployment.imageVersion=testing" \
+          --set chat.deployment.imageVersion=testing \
+          --set consumer.deployment.imageVersion=testing \
+          --set user.deployment.imageVersion=testing \
+
+      - name: Wait 60 seconds before integration tests
+        run: sleep 60s
+
+      - name: Run integration tests
+        run: |
+          echo "TODO: placeholder for now"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          kind delete cluster --name ${{ github.sha }}
