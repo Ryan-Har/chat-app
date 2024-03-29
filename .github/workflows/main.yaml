@@ -101,7 +101,7 @@ jobs:
     steps:
       - name: Get version number
         run: |
-          echo "::set-output name=version::${{ needs.[{ matrix.needs_job }].outputs.version }}"
+          echo "::set-output name=version::${{ needs.${{ matrix.needs_job }}.outputs.version }}"
 
       - name: Update Helm chart values
         run: |
