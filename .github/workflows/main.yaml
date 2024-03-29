@@ -90,6 +90,10 @@ jobs:
         - patch
         - feature
         - upgrade
+
+    env:
+      WORKING_DIR: ${{ github.workspace }}
+      REPO_NAME: ${{ github.repository }}
     
     steps:
 
