@@ -37,6 +37,8 @@ jobs:
         id: execute_job
         run: |
           cd $WORKING_DIR/chat-app-helm
+          echo $(yq '.version' Chart.yaml)
+          echo $(pwd)
           if [[ $source == feature-* ]]; then
             echo "This PR originated from a feature branch."
             IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
