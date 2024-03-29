@@ -152,3 +152,10 @@ jobs:
           gh release upload ${{ steps.Get_version_number.outputs.version }} chat-app-helm-${{ steps.Get_version_number.outputs.version }}.tgz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup
+        if: always()
+        run: |
+          cd $WORKING_DIR
+          rf -rf chat-ap-helm
+          
