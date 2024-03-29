@@ -42,23 +42,19 @@ jobs:
             IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
             ((minor++))
             patch=0
-            echo "version=$major.$minor.$patch" >> $GITHUB_ENV
+            echo version=$major.$minor.$patch >> $GITHUB_ENV
           elif [[ $source == patch-* ]]; then
             echo "This PR originated from a patch branch."
-            echo $(pwd)
-            echo $(ls -la)
             IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
-            echo $major $minor $patch
             ((patch++))
-            echo "version=$major.$minor.$patch"
-            echo "version=$major.$minor.$patch" >> $GITHUB_ENV
+            echo version=$major.$minor.$patch >> $GITHUB_ENV
           elif [[ $source == upgrade-* ]]; then
             echo "This PR originated from an upgrade branch."
             IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
             ((major++))
             minor=0
             patch=0
-            echo "version=$major.$minor.$patch" >> $GITHUB_ENV
+            echo version=$major.$minor.$patch >> $GITHUB_ENV
           else
             echo "Unknown source branch."
             exit 1
