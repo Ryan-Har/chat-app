@@ -157,5 +157,5 @@ jobs:
         if: always()
         run: |
           cd $WORKING_DIR
-          rf -rf chat-ap-helm
+          rm -rf chat-ap-helm
           
