@@ -26,19 +26,18 @@ jobs:
       
       - name: Check PR source branch
         id: check_source
-        run: echo "::set-output name=source::${{ github.HEAD_REF }}"
+        run: echo "source=${{ github.HEAD_REF }}" >> $GITHUB_ENV
 
       - name: Execute job based on origin
         id: execute_job
         run: |
-          branch_name="${{ steps.check_source.outputs.source }}"
-          if [[ $branch_name == feature-* ]]; then
+          if [[ $source == feature-* ]]; then
             echo "This PR originated from a feature branch."
             echo "::set-output name=job_type::feature"
-          elif [[ $branch_name == patch-* ]]; then
+          elif [[ $source == patch-* ]]; then
             echo "This PR originated from a patch branch."
             echo "::set-output name=job_type::patch"
-          elif [[ $branch_name == upgrade-* ]]; then
+          elif [[ $source == upgrade-* ]]; then
             echo "This PR originated from an upgrade branch."
             echo "::set-output name=job_type::upgrade"
           else
@@ -49,7 +48,7 @@ jobs:
   patch:
     needs: check-merge
     runs-on: self-hosted
-    if: ${{ needs.check-merge.outputs.execute_job == 'patch' }}
+    if: ${{ needs.check-merge.outputs.job_type == 'patch' }}
     steps:
       - name: Generate version number
         run: |
@@ -60,7 +59,7 @@ jobs:
   feature:
     needs: check-merge
     runs-on: self-hosted
-    if: ${{ needs.check-merge.outputs.execute_job == 'feature' }}
+    if: ${{ needs.check-merge.outputs.job_type == 'feature' }}
     steps:
       - name: Generate version number
         run: |
@@ -72,7 +71,7 @@ jobs:
   upgrade:
     needs: check-merge
     runs-on: self-hosted
-    if: ${{ needs.check-merge.outputs.execute_job == 'upgrade' }}
+    if: ${{ needs.check-merge.outputs.job_type == 'upgrade' }}
     steps:
       - name: Generate version number
         run: |
