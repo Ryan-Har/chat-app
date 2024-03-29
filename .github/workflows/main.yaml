@@ -24,11 +24,6 @@ jobs:
         with:
           go-version: '1.22'
       
-      - name: Pull current helm chart
-        run: |
-          cd $WORKING_DIR
-          helm pull oci://registry-1.docker.io/pandects/chat-app-helm --untar
-      
       - name: Check PR source branch
         id: check_source
         run: echo "::set-output name=source::${{ github.HEAD_REF }}"
@@ -101,6 +96,11 @@ jobs:
       - name: Get version number
         run: |
           echo "::set-output name=version::${{ needs[matrix.needs_job].outputs.version }}"
+
+      - name: Pull current helm chart
+        run: |
+          cd $WORKING_DIR
+          helm pull oci://registry-1.docker.io/pandects/chat-app-helm --untar
 
       - name: Update Helm chart values
         run: |
