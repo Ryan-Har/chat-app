@@ -97,8 +97,6 @@ jobs:
         - upgrade
     
     steps:
-      - name: yq - portable yaml processor
-        uses: mikefarah/yq@v4.43.1
 
       - name: Get version number
         run: |
@@ -106,7 +104,7 @@ jobs:
 
       - name: Update Helm chart values
         run: |
-          cd $WORKING_DIR
+          cd $WORKING_DIR/chat-app-helm
           for img in $(echo api app chat consumer user); do yq -i ".${img}.deployment.imageVersion = \"${{ steps.Get_version_number.outputs.version }}\"" values.yaml; done
           yq -i ".version = \"${{ steps.Get_version_number.outputs.version }}\" | .appVersion = \"${{ steps.Get_version_number.outputs.version }}\"" Chart.yaml
 
