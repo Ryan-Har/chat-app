@@ -40,17 +40,13 @@ jobs:
           if [[ $source == feature-* ]]; then
             echo "This PR originated from a feature branch."
             IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
-            ((minor++))
+            minor=$((minor + 1))
             patch=0
             echo version=$major.$minor.$patch >> $GITHUB_ENV
           elif [[ $source == patch-* ]]; then
             echo "This PR originated from a patch branch."
             IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
-            echo $major 
-            echo "ifs used"
             patch=$((patch + 1))
-            echo $major.$minor
-            echo $patch
             echo version=$major.$minor.$patch >> $GITHUB_ENV
           elif [[ $source == upgrade-* ]]; then
             echo "This PR originated from an upgrade branch."
@@ -76,8 +72,8 @@ jobs:
           for module in $(find . -mindepth 1 -maxdepth 1 -type d | sed 's/^\.\///'); do
             cd $module
             if [ -f Dockerfile ]; then
-              docker build -t pandects/"$module":"${{ needs[matrix.needs_job].outputs.version }}" -t pandects/"$module":latest .
-              docker push pandects/"$module":$${{ needs[matrix.needs_job].outputs.version }} && docker push pandects/"$module":latest
+              docker build -t pandects/"$module":$version -t pandects/"$module":latest .
+              docker push pandects/"$module":$version && docker push pandects/"$module":latest
             fi
             cd ..
           done
