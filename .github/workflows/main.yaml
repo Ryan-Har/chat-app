@@ -1,7 +1,7 @@
 name: Build and Deploy
 
 on:
-  pull_request_target:
+  pull_request:
     types: [closed]
     branches:
       - main
@@ -93,7 +93,10 @@ jobs:
     runs-on: self-hosted
     strategy:
       matrix:
-        needs_job: [patch, feature, upgrade]
+        needs_job: 
+        - patch
+        - feature
+        - upgrade
     
     steps:
       - name: Get version number
