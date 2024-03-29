@@ -112,4 +112,3 @@ jobs:
         run: |
           cd $WORKING_DIR
           rm -rf chat-ap-helm
-          
