@@ -23,6 +23,11 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: '1.22'
+
+      - name: Pull current helm chart
+        run: |
+          cd $WORKING_DIR
+          helm pull oci://registry-1.docker.io/pandects/chat-app-helm --untar
       
       - name: Check PR source branch
         id: check_source
@@ -33,83 +38,32 @@ jobs:
         run: |
           if [[ $source == feature-* ]]; then
             echo "This PR originated from a feature branch."
-            echo "::set-output name=job_type::feature"
+            IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
+            ((minor++))
+            patch=0
+            echo "version=$major.$minor.$patch" >> $GITHUB_ENV
           elif [[ $source == patch-* ]]; then
             echo "This PR originated from a patch branch."
-            echo "::set-output name=job_type::patch"
+            IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
+            ((patch++))
+            echo "version=$major.$minor.$patch" >> $GITHUB_ENV
           elif [[ $source == upgrade-* ]]; then
             echo "This PR originated from an upgrade branch."
-            echo "::set-output name=job_type::upgrade"
+            IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
+            ((major++))
+            minor=0
+            patch=0
+            echo "version=$major.$minor.$patch" >> $GITHUB_ENV
           else
             echo "Unknown source branch."
             exit 1
           fi
 
-  patch:
-    needs: check-merge
-    runs-on: self-hosted
-    if: ${{ needs.check-merge.outputs.job_type == 'patch' }}
-    steps:
-      - name: Generate version number
-        run: |
-          IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
-          ((patch++))
-          echo "::set-output name=version::$major.$minor.$patch"
-
-  feature:
-    needs: check-merge
-    runs-on: self-hosted
-    if: ${{ needs.check-merge.outputs.job_type == 'feature' }}
-    steps:
-      - name: Generate version number
-        run: |
-          IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
-          ((minor++))
-          patch=0
-          echo "::set-output name=version::$major.$minor.$patch"
-
-  upgrade:
-    needs: check-merge
-    runs-on: self-hosted
-    if: ${{ needs.check-merge.outputs.job_type == 'upgrade' }}
-    steps:
-      - name: Generate version number
-        run: |
-          IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
-          ((major++))
-          minor=0
-          patch=0
-          echo "::set-output name=version::$major.$minor.$patch"
-
-  build-and-push:
-    runs-on: self-hosted
-    strategy:
-      matrix:
-        needs_job: 
-        - patch
-        - feature
-        - upgrade
-
-    env:
-      WORKING_DIR: ${{ github.workspace }}
-      REPO_NAME: ${{ github.repository }}
-    
-    steps:
-
-      - name: Get version number
-        run: |
-          echo "::set-output name=version::${{ needs[matrix.needs_job].outputs.version }}"
-
-      - name: Pull current helm chart
-        run: |
-          cd $WORKING_DIR
-          helm pull oci://registry-1.docker.io/pandects/chat-app-helm --untar
-
       - name: Update Helm chart values
         run: |
           cd $WORKING_DIR/chat-app-helm
-          for img in $(echo api app chat consumer user); do yq -i ".${img}.deployment.imageVersion = \"${{ steps.Get_version_number.outputs.version }}\"" values.yaml; done
-          yq -i ".version = \"${{ steps.Get_version_number.outputs.version }}\" | .appVersion = \"${{ steps.Get_version_number.outputs.version }}\"" Chart.yaml
+          for img in $(echo api app chat consumer user); do yq -i ".${img}.deployment.imageVersion = \"$version\"" values.yaml; done
+          yq -i ".version = \"$version\" | .appVersion = \"$version\"" Chart.yaml
 
       - name: Build Docker containers, tag and push
         run: |
@@ -130,25 +84,25 @@ jobs:
 
       - name: Push Helm Chart
         run: |
-          helm push ./chat-app-helm-${{ steps.Get_version_number.outputs.version }}.tgz oci://registry-1.docker.io/pandects
+          helm push ./chat-app-helm-$version.tgz oci://registry-1.docker.io/pandects
 
       - name: Upload Helm Chart Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: chat-app-helm-${{ steps.Get_version_number.outputs.version }}.tgz
-          path: chat-app-helm-${{ steps.Get_version_number.outputs.version }}.tgz
+          name: chat-app-helm-$version.tgz
+          path: chat-app-helm-$version.tgz
 
       - name: Create GitHub Release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
         with:
-          tag_name: ${{ steps.Get_version_number.outputs.version }}
-          release_name: Chat app v${{ steps.Get_version_number.outputs.version }}
+          tag_name: $version
+          release_name: Chat app v$version
 
       - name: Upload Artifact as Release Asset
         run: |
-          gh release upload ${{ steps.Get_version_number.outputs.version }} chat-app-helm-${{ steps.Get_version_number.outputs.version }}.tgz
+          gh release upload $version chat-app-helm-$version.tgz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
