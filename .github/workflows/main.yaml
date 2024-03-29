@@ -93,7 +93,10 @@ jobs:
     runs-on: self-hosted
     strategy:
       matrix:
-        needs_job: [patch, feature, upgrade]
+        needs_job: 
+        - patch
+        - feature
+        - upgrade
     
     steps:
       - name: Get version number
