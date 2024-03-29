@@ -7,134 +7,142 @@ on:
       - main
 
 jobs:
-  build_and_create_release:
+  check-merge:
     if: github.event.pull_request.merged == true
     runs-on: self-hosted
 
     env:
       WORKING_DIR: ${{ github.workspace }}
       REPO_NAME: ${{ github.repository }}
-      MAJOR_RELEASE: 1
-      MINOR_RELEASE: 1
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: yq - portable yaml processor
+        uses: mikefarah/yq@v4.43.1
+
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.22'
-
-      - name: Install dependencies
+      
+      - name: Pull current helm chart
         run: |
-          cd $WORKING_DIR/src
-          for module in $(find . -mindepth 1 -maxdepth 1 -type d); do
-            cd $module
-            if [ -f go.mod ]; then
-              go mod download
-            fi
-            cd ..
-          done
+          cd $WORKING_DIR
+          helm pull oci://registry-1.docker.io/pandects/chat-app-helm --untar
+      
+      - name: Check PR source branch
+        id: check_source
+        run: echo "::set-output name=source::${GITHUB_EVENT_PATH}"
 
-      - name: Install MockGen
+      - name: Execute job based on origin
+        id: execute_job
         run: |
-          cd $WORKING_DIR/src/api
-          go get github.com/golang/mock/mockgen@latest
+          if [[ "$(echo ${{ steps.check_source.outputs.source }} | jq '.pull_request.head.ref')" == "\"feature-"* ]]; then
+            echo "This PR originated from a feature branch."
+            echo "::set-output name=job_type::feature"
+          elif [[ "$(echo ${{ steps.check_source.outputs.source }} | jq '.pull_request.head.ref')" == "\"patch-"* ]]; then
+            echo "This PR originated from a patch branch."
+            echo "::set-output name=job_type::patch"
+          elif [[ "$(echo ${{ steps.check_source.outputs.source }} | jq '.pull_request.head.ref')" == "\"upgrade-"* ]]; then
+            echo "This PR originated from an upgrade branch."
+            echo "::set-output name=job_type::upgrade"
+          else
+            echo "Unknown source branch."
+            exit 1
+          fi
 
-      - name: Create dbquery handler mocks
+  patch:
+    needs: check-merge
+    runs-on: self-hosted
+    if: ${{ steps.check-merge.outputs.execute_job == 'patch' }}
+    steps:
+      - name: Generate version number
         run: |
-          cd $WORKING_DIR/src/api
-          mockgen -destination=mocks/db_mock.go github.com/Ryan-Har/chat-app/src/api/dbquery DBQueryHandler
+          IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
+          ((patch++))
+          echo "::set-output name=version::$major.$minor.$patch"
 
-      - name: Run tests and build Docker containers
+  feature:
+    needs: check-merge
+    runs-on: self-hosted
+    if: ${{ steps.check-merge.outputs.execute_job == 'feature' }}
+    steps:
+      - name: Generate version number
         run: |
-          cd $WORKING_DIR/src
-          for module in $(find . -mindepth 1 -maxdepth 1 -type d | sed 's/^\.\///'); do
-            cd $module
-            for submodule in $(find . -mindepth 1 -maxdepth 1 -type d -not -name *web*); do
-              cd $submodule
-              if [ -f *_test.go ]
-              then
-                go test
-              fi
-              cd ..
-            done
-            if [ -f *_test.go ]
-            then
-                go test
-            fi
-            if [ -f Dockerfile ]; then
-              docker build -t pandects/"$module":${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }} .
-            fi
-            cd ..
-          done
+          IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
+          ((minor++))
+          patch=0
+          echo "::set-output name=version::$major.$minor.$patch"
 
-      - name: Setup Kind cluster
+  upgrade:
+    needs: check-merge
+    runs-on: self-hosted
+    if: ${{ steps.check-merge.outputs.execute_job == 'upgrade' }}
+    steps:
+      - name: Generate version number
         run: |
-          kind create cluster --name ${{ github.run_number }} --wait 5m
+          IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
+          ((major++))
+          minor=0
+          patch=0
+          echo "::set-output name=version::$major.$minor.$patch"
+
+  build-and-push:
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        needs_job: [patch, feature, upgrade]
+    
+    steps:
+      - name: Get version number
+        run: |
+          echo "::set-output name=version::${{ needs.[{ matrix.needs_job }].outputs.version }}"
 
       - name: Update Helm chart values
         run: |
           cd $WORKING_DIR
-          sed -i 's/^version: .*/version: "${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}"/' ./helm/Chart.yaml
+          for img in $(echo api app chat consumer user); do yq -i ".${img}.deployment.imageVersion = \"${{ steps.Get_version_number.outputs.version }}\"" values.yaml; done
+          yq -i ".version = \"${{ steps.Get_version_number.outputs.version }}\" | .appVersion = \"${{ steps.Get_version_number.outputs.version }}\"" Chart.yaml
 
-      - name: Deploy to Kind cluster
-        run: |
-          kubectl config use-context kind-${{ github.run_number }}
-          helm install chat-app helm/ -f helm/values.yaml \
-          --set api.deployment.imageVersion="${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}" \
-          --set app.deployment.imageVersion="${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}" \
-          --set chat.deployment.imageVersion="${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}" \
-          --set consumer.deployment.imageVersion="${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}" \
-          --set user.deployment.imageVersion="${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}" \
-
-      - name: Wait 60 seconds before integration tests
-        run: sleep 60s
-
-      - name: Run integration tests
-        run: |
-          echo "TODO: placeholder for now"
-
-      - name: Push Docker containers to Docker Hub
+      - name: Build Docker containers, tag and push
         run: |
           cd $WORKING_DIR/src
           for module in $(find . -mindepth 1 -maxdepth 1 -type d | sed 's/^\.\///'); do
             cd $module
             if [ -f Dockerfile ]; then
-              docker push pandects/"$module":${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}
+              docker build -t pandects/"$module":${{ steps.Get_version_number.outputs.version }} -t pandects/"$module":latest .
+              docker push pandects/"$module":${{ steps.Get_version_number.outputs.version }} && docker push pandects/"$module":latest
             fi
             cd ..
           done
 
-      - name: Package Helm Chart (excluding folder/file)
+      - name: Package Helm Chart
         run: |
           cd $WORKING_DIR
-          tar -cf helm-chart.tgz ./helm
-          
+          helm package chat-app-helm
+
+      - name: Push Helm Chart
+        run: |
+          helm push ./chat-app-helm-${{ steps.Get_version_number.outputs.version }}.tgz oci://registry-1.docker.io/pandects
+
       - name: Upload Helm Chart Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: helm-chart
-          path: helm-chart.tgz
+          name: chat-app-helm-${{ steps.Get_version_number.outputs.version }}.tgz
+          path: chat-app-helm-${{ steps.Get_version_number.outputs.version }}.tgz
 
       - name: Create GitHub Release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
         with:
-          tag_name: ${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}
-          release_name: Chat app ${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }}
-          body: |  # Optional release description
-            This is a test release.
+          tag_name: ${{ steps.Get_version_number.outputs.version }}
+          release_name: Chat app v${{ steps.Get_version_number.outputs.version }}
 
       - name: Upload Artifact as Release Asset
         run: |
-          gh release upload ${{ env.MAJOR_RELEASE }}.${{ env.MINOR_RELEASE }}.${{ github.run_number }} helm-chart.tgz
+          gh release upload ${{ steps.Get_version_number.outputs.version }} chat-app-helm-${{ steps.Get_version_number.outputs.version }}.tgz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Cleanup
-        if: always()
-        run: |
-          kind delete cluster --name ${{ github.run_number }}
