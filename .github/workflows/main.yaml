@@ -7,7 +7,7 @@ on:
       - main
 
 jobs:
-  check-merge:
+  Build-and-deploy:
     if: github.event.pull_request.merged == true
     runs-on: self-hosted
 
@@ -90,16 +90,16 @@ jobs:
       - name: Upload Helm Chart Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: chat-app-helm-$version.tgz
-          path: chat-app-helm-$version.tgz
+          name: chat-app-helm-${{ env.version }}.tgz
+          path: chat-app-helm-${{ env.version }}.tgz
 
       - name: Create GitHub Release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
         with:
-          tag_name: $version
-          release_name: Chat app v$version
+          tag_name: ${{ env.version }}
+          release_name: Chat app v${{ env.version }}
 
       - name: Upload Artifact as Release Asset
         run: |
