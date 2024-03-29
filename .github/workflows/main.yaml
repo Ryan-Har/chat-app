@@ -33,9 +33,10 @@ jobs:
         id: check_source
         run: echo "source=${{ github.HEAD_REF }}" >> $GITHUB_ENV
 
-      - name: Execute job based on origin
+      - name: Set version
         id: execute_job
         run: |
+          cd $WORKING_DIR/chat-app-helm
           if [[ $source == feature-* ]]; then
             echo "This PR originated from a feature branch."
             IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
