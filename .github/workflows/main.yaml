@@ -49,7 +49,7 @@ jobs:
             echo "This PR originated from a patch branch."
             IFS="." read -r major minor patch <<< $(yq '.version' Chart.yaml)
             ((patch++))
-            echo "version=$major.$minor.$patch
+            echo "version=$major.$minor.$patch"
             echo "version=$major.$minor.$patch" >> $GITHUB_ENV
           elif [[ $source == upgrade-* ]]; then
             echo "This PR originated from an upgrade branch."
