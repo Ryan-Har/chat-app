@@ -72,8 +72,8 @@ jobs:
           for module in $(find . -mindepth 1 -maxdepth 1 -type d | sed 's/^\.\///'); do
             cd $module
             if [ -f Dockerfile ]; then
-              docker build -t pandects/"$module":$version -t pandects/"$module":latest .
-              docker push pandects/"$module":$version && docker push pandects/"$module":latest
+              docker build -t pandects/chat-app-"$module":$version -t pandects/chat-app-"$module":latest .
+              docker push pandects/chat-app-"$module":$version && docker push pandects/chat-app-"$module":latest
             fi
             cd ..
           done
