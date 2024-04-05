@@ -33,7 +33,7 @@ var lavinMQURL string = fmt.Sprintf("amqp://guest:guest@%s:%s/", lavinmqHost, la
 var apiBaseUrl string = fmt.Sprintf("http://%s:%s/api", apiHost, apiPort)
 
 const (
-	queueName   = "ChatMessageQueue"
+	queueName   = "ChatUpdateQueue"
 	workerCount = 5
 )
 
