@@ -48,6 +48,7 @@ type BrokerMessage struct {
 	Address     string `json:"address"`
 	MessageText string `json:"messagetext"`
 	UserID      string `json:"userid"`
+	Time        string `json:"time"`
 }
 
 var brokerSendingChan = make(chan amqp091.Publishing)
@@ -92,7 +93,7 @@ func (wk *worker) work(workerChan chan<- *worker, brokerchan chan amqp091.Publis
 			if err, ok := r.(error); ok {
 				wk.err = err
 			} else {
-				wk.err = fmt.Errorf("Panic happened with %v", r)
+				wk.err = fmt.Errorf("panic happened with %v", r)
 			}
 		} else {
 			wk.err = err
@@ -285,6 +286,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		brokerMessage := BrokerMessage{
 			Roomid:      guid,
 			MessageText: "Start of chat",
+			Time:        getTimeNow(),
 		}
 
 		if err := sendToBroker(&brokerMessage); err != nil {
@@ -295,6 +297,19 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Add the client to the room
 	room[guid][conn] = &userinfo
+
+	//send user joined message to broker
+	brokerMessage := BrokerMessage{
+		Roomid:      guid,
+		MessageText: "User joined chat",
+		UserID:      userinfo.UserID,
+		Time:        getTimeNow(),
+	}
+
+	if err := sendToBroker(&brokerMessage); err != nil {
+		log.Println(err)
+		return
+	}
 
 	// Listen for messages from the client
 	for {
@@ -310,6 +325,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			UserID:      userinfo.UserID,
 			Address:     userinfo.IPAddr,
 			MessageText: string(payload),
+			Time:        getTimeNow(),
 		}
 
 		if err := sendToBroker(&brokerMessage); err != nil {
@@ -328,10 +344,24 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Remove the client from the room when the connection is closed
 	delete(room[guid], conn)
 
+	//send user left message to broker
+	brokerMessage = BrokerMessage{
+		Roomid:      guid,
+		MessageText: "User left chat",
+		UserID:      userinfo.UserID,
+		Time:        getTimeNow(),
+	}
+
+	if err := sendToBroker(&brokerMessage); err != nil {
+		log.Println(err)
+		return
+	}
+
 	if len(room[guid]) == 0 {
 		brokerMessage := BrokerMessage{
 			Roomid:      guid,
 			MessageText: "End of chat",
+			Time:        getTimeNow(),
 		}
 		log.Println("End of chat:", guid)
 		if err := sendToBroker(&brokerMessage); err != nil {
@@ -371,6 +401,10 @@ func sendGetRequest(url string, content *bytes.Reader) (*http.Response, error) {
 		return nil, err
 	}
 	return resp, nil
+}
+
+func getTimeNow() string {
+	return time.Now().Format("2006-01-02 15:04:05.999999")
 }
 
 func main() {

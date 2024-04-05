@@ -451,6 +451,45 @@ func getChatsInProgress(w http.ResponseWriter, dbqh dbquery.DBQueryHandler) {
 	}
 }
 
+func chatParticipantUpdate(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQueryHandler) {
+	enableCors(&w)
+	respondJson(&w)
+
+	var jl *JoinLeave
+	err := json.NewDecoder(r.Body).Decode(&jl)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	verifiedTime, err := verifyTimeFormat(jl.Time)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	idint64, err := strconv.ParseInt(jl.UserID, 10, 64)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if r.Method == "POST" {
+		log.Println("Join chat participant api request:", jl)
+		if _, err := dbqh.JoinChatParticipant(jl.ChatUUID, idint64, verifiedTime); err != nil {
+			verifyDBErrorsAndReturn(w, err)
+		}
+	} else if r.Method == "PUT" {
+		log.Println("Leave chat participant api request:", jl)
+		if _, err := dbqh.LeaveChatParticipant(jl.ChatUUID, idint64, verifiedTime); err != nil {
+			verifyDBErrorsAndReturn(w, err)
+		}
+	} else {
+		http.Error(w, errors.New("only POST or PUT requests accepted").Error(), http.StatusBadRequest)
+		return
+	}
+}
+
 // takes a slice of fields provided by a db query and a struct as an interface and converts to the requested struct as an interface.
 func convertSliceToStruct(sl []interface{}, str interface{}) error {
 	//TODO: add checking for this function to ensure that the length of each interface is correct.
@@ -495,6 +534,12 @@ func convertSliceToStruct(sl []interface{}, str interface{}) error {
 	}
 }
 
+type JoinLeave struct {
+	ChatUUID string `json:"chatuuid"`
+	Time     string `json:"time"`
+	UserID   string `json:"userid"`
+}
+
 type ChatUuidTime struct {
 	ChatUUID string `json:"chatuuid"`
 	Time     string `json:"time"`
@@ -527,10 +572,13 @@ func verifyDBErrorsAndReturn(w http.ResponseWriter, err error) {
 	case strings.HasPrefix(err.Error(), "pq: invalid input syntax"):
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, err.Error())
-	case err.Error() == "no rows changed":
-		w.WriteHeader(http.StatusNoContent)
+	case err.Error() == "no rows changed": //this is used for updates, when we're expecting a row to be updated
+		w.WriteHeader(http.StatusUnprocessableEntity)
 	case strings.HasPrefix(err.Error(), "pq: duplicate key value violates unique constraint"):
 		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, err.Error())
+	case strings.Contains(err.Error(), "violates foreign key constraint"):
+		w.WriteHeader(http.StatusUnprocessableEntity)
 		fmt.Fprint(w, err.Error())
 	default:
 		w.WriteHeader(http.StatusInternalServerError)
@@ -625,6 +673,9 @@ func main() {
 	r.HandleFunc("/api/chat/inprogress", func(w http.ResponseWriter, r *http.Request) {
 		getChatsInProgress(w, dbQueryHandler)
 	}).Methods("GET")
+	r.HandleFunc("/api/chat/participantupdate", func(w http.ResponseWriter, r *http.Request) {
+		chatParticipantUpdate(w, r, dbQueryHandler)
+	}).Methods("POST", "PUT")
 
 	fmt.Printf("Starting server  at port 8001\n")
 	log.Fatal(http.ListenAndServe(":8001", handlers.CORS(originsOk, headersOk, methodsOk)(r)))

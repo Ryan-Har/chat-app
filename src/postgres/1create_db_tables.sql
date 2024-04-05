@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS "chat_messages" (
 );
 
 CREATE TABLE IF NOT EXISTS "chat_participant"(
-    "id" integer NOT NULL UNIQUE,
+    "id" serial NOT NULL UNIQUE,
     "chat_uuid" uuid NOT NULL,
     "user_id" integer NOT NULL,
     "time_joined" timestamp with time zone,

@@ -24,6 +24,8 @@ type DBQueryHandler interface {
 	AddMessageByUUID(uuid string, userid int64, message string, time string) ([][]any, error)
 	GetAllMessagesByUUID(uuid string) ([][]any, error)
 	GetAllChatsInProgress() ([][]any, error)
+	JoinChatParticipant(uuid string, userid int64, time string) ([][]any, error)
+	LeaveChatParticipant(uuid string, userid int64, time string) ([][]any, error)
 }
 
 type PostgresDBConfig struct {
@@ -545,6 +547,60 @@ func (pqh PostgresQueryHandler) GetAllChatsInProgress() ([][]any, error) {
 	resp, ok := <-dbq.ReturnChan
 
 	log.Println("Get all chats in progress DB Response:", resp)
+
+	if !ok {
+		return resp, errors.New("channel closed, no data")
+	}
+	if err := checkSqlResponseForErrors(resp, dbq.ExpectSingleRow); err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+func (pqh PostgresQueryHandler) JoinChatParticipant(uuid string, userid int64, time string) ([][]any, error) {
+	dbq := dbQuery{
+		Query: fmt.Sprintf("INSERT INTO chat_participant (chat_uuid, user_id, time_joined) VALUES (%s, %d, %s)",
+			singleQuote(uuid),
+			userid,
+			singleQuote(time)),
+		ReturnChan:              make(chan [][]interface{}),
+		NumberOfColumnsExpected: 0,
+		ExpectSingleRow:         false,
+	}
+
+	log.Println("Join chat participant DB Request:", dbq.Query)
+
+	pqh.RequestChan <- dbq
+	resp, ok := <-dbq.ReturnChan
+
+	log.Println("Join chat participant DB Response:", resp)
+
+	if !ok {
+		return resp, errors.New("channel closed, no data")
+	}
+	if err := checkSqlResponseForErrors(resp, dbq.ExpectSingleRow); err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+func (pqh PostgresQueryHandler) LeaveChatParticipant(uuid string, userid int64, time string) ([][]any, error) {
+	dbq := dbQuery{
+		Query: fmt.Sprintf("UPDATE chat_participant SET time_left = %s WHERE chat_uuid = %s AND user_id = %d",
+			singleQuote(time),
+			singleQuote(uuid),
+			userid),
+		ReturnChan:              make(chan [][]interface{}),
+		NumberOfColumnsExpected: 0,
+		ExpectSingleRow:         false,
+	}
+
+	log.Println("Leave chat participant DB Request:", dbq.Query)
+
+	pqh.RequestChan <- dbq
+	resp, ok := <-dbq.ReturnChan
+
+	log.Println("Leave chat participant DB Response:", resp)
 
 	if !ok {
 		return resp, errors.New("channel closed, no data")
