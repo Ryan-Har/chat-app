@@ -26,6 +26,8 @@ type DBQueryHandler interface {
 	GetAllChatsInProgress() ([][]any, error)
 	JoinChatParticipant(uuid string, userid int64, time string) ([][]any, error)
 	LeaveChatParticipant(uuid string, userid int64, time string) ([][]any, error)
+	GetOngoingChatParticipants() ([][]any, error)
+	GetOngoingChatMessages() ([][]any, error)
 }
 
 type PostgresDBConfig struct {
@@ -601,6 +603,81 @@ func (pqh PostgresQueryHandler) LeaveChatParticipant(uuid string, userid int64, 
 	resp, ok := <-dbq.ReturnChan
 
 	log.Println("Leave chat participant DB Response:", resp)
+
+	if !ok {
+		return resp, errors.New("channel closed, no data")
+	}
+	if err := checkSqlResponseForErrors(resp, dbq.ExpectSingleRow); err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+func (pqh PostgresQueryHandler) GetOngoingChatParticipants() ([][]any, error) {
+	dbq := dbQuery{
+		Query: `SELECT c.uuid::VARCHAR,
+				c.start_time::VARCHAR,
+				p.user_id,
+				CASE WHEN p.time_left IS NULL THEN TRUE ELSE FALSE END AS active,
+				u.internal,
+				COALESCE(iu.firstname || ' ' || iu.surname, eu.name) AS name
+			FROM chat c
+			INNER JOIN (
+				SELECT UUID
+				FROM chat
+				WHERE end_time IS null
+				) active_chats ON c.uuid = active_chats.uuid
+			LEFT JOIN chat_participant p ON c.uuid = p.chat_uuid
+			LEFT JOIN users u ON p.user_id = u.id
+			LEFT JOIN internal_users iu ON u.id = iu.user_id
+			LEFT JOIN external_users eu ON u.id = eu.user_id
+			ORDER BY uuid`,
+		ReturnChan:              make(chan [][]interface{}),
+		NumberOfColumnsExpected: 6,
+		ExpectSingleRow:         false,
+	}
+
+	log.Println("Get ongoing chat participants DB Request:", dbq.Query)
+
+	pqh.RequestChan <- dbq
+	resp, ok := <-dbq.ReturnChan
+
+	log.Println("Get ongoing chat participants DB Response:", resp)
+
+	if !ok {
+		return resp, errors.New("channel closed, no data")
+	}
+	if err := checkSqlResponseForErrors(resp, dbq.ExpectSingleRow); err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+func (pqh PostgresQueryHandler) GetOngoingChatMessages() ([][]any, error) {
+	dbq := dbQuery{
+		Query: `SELECT c.uuid::VARCHAR,
+				m.user_id_from,		
+				m.message,		
+				m.timestamp::VARCHAR as message_time
+			FROM chat c
+			INNER JOIN (
+				SELECT UUID
+				FROM chat
+				WHERE end_time IS null
+				) active_chats ON c.uuid = active_chats.uuid
+			LEFT JOIN chat_messages m ON c.uuid = m.chat_uuid
+			ORDER BY uuid, message_time asc`,
+		ReturnChan:              make(chan [][]interface{}),
+		NumberOfColumnsExpected: 4,
+		ExpectSingleRow:         false,
+	}
+
+	log.Println("Get ongoing chat messages DB Request:", dbq.Query)
+
+	pqh.RequestChan <- dbq
+	resp, ok := <-dbq.ReturnChan
+
+	log.Println("Get ongoing chat messages DB Response:", resp)
 
 	if !ok {
 		return resp, errors.New("channel closed, no data")

@@ -359,7 +359,7 @@ func processMessage(msg amqp091.Delivery) error {
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode == 422 {
-			log.Printf("Participant join api request for uuid %s resulted in 422, requeue", body)
+			log.Printf("Participant leave api request for uuid %s resulted in 422, requeue", body)
 			msg.Nack(false, true)
 			return err
 		}

@@ -490,6 +490,72 @@ func chatParticipantUpdate(w http.ResponseWriter, r *http.Request, dbqh dbquery.
 	}
 }
 
+func GetAllOngoingChatParticipants(w http.ResponseWriter, dbqh dbquery.DBQueryHandler) {
+	enableCors(&w)
+	respondJson(&w)
+
+	log.Println("Get all ongoing chat participants api request:")
+
+	resp, err := dbqh.GetOngoingChatParticipants()
+	if err != nil {
+		verifyDBErrorsAndReturn(w, err)
+	}
+
+	respSlice := []chatParticipant{}
+
+	for i := range resp {
+		structToVerify := chatParticipant{}
+		intToStruct := interface{}(&structToVerify)
+
+		if err := convertSliceToStruct(resp[i], intToStruct); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+			return
+		}
+		respSlice = append(respSlice, structToVerify)
+	}
+
+	err = json.NewEncoder(w).Encode(respSlice)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error converting result to JSON")
+		return
+	}
+}
+
+func GetAllOngoingChatMessages(w http.ResponseWriter, dbqh dbquery.DBQueryHandler) {
+	enableCors(&w)
+	respondJson(&w)
+
+	log.Println("Get all ongoing chat messages api request:")
+
+	resp, err := dbqh.GetOngoingChatMessages()
+	if err != nil {
+		verifyDBErrorsAndReturn(w, err)
+	}
+
+	respSlice := []ChatMessage{}
+
+	for i := range resp {
+		structToVerify := ChatMessage{}
+		intToStruct := interface{}(&structToVerify)
+
+		if err := convertSliceToStruct(resp[i], intToStruct); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+			return
+		}
+		respSlice = append(respSlice, structToVerify)
+	}
+
+	err = json.NewEncoder(w).Encode(respSlice)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error converting result to JSON")
+		return
+	}
+}
+
 // takes a slice of fields provided by a db query and a struct as an interface and converts to the requested struct as an interface.
 func convertSliceToStruct(sl []interface{}, str interface{}) error {
 	//TODO: add checking for this function to ensure that the length of each interface is correct.
@@ -532,6 +598,15 @@ func convertSliceToStruct(sl []interface{}, str interface{}) error {
 	} else {
 		return fmt.Errorf("%v is not a pointer to a struct", str)
 	}
+}
+
+type chatParticipant struct {
+	ChatUUID  string `json:"chatuuid"`
+	StartTime string `json:"starttime"`
+	UserID    int64  `json:"userid"`
+	Active    bool   `json:"active"`
+	Internal  bool   `json:"internal"`
+	Name      string `json:"name"`
 }
 
 type JoinLeave struct {
@@ -676,6 +751,12 @@ func main() {
 	r.HandleFunc("/api/chat/participantupdate", func(w http.ResponseWriter, r *http.Request) {
 		chatParticipantUpdate(w, r, dbQueryHandler)
 	}).Methods("POST", "PUT")
+	r.HandleFunc("/api/chat/inprogress/messages", func(w http.ResponseWriter, r *http.Request) {
+		GetAllOngoingChatMessages(w, dbQueryHandler)
+	}).Methods("GET")
+	r.HandleFunc("/api/chat/inprogress/participants", func(w http.ResponseWriter, r *http.Request) {
+		GetAllOngoingChatParticipants(w, dbQueryHandler)
+	}).Methods("GET")
 
 	fmt.Printf("Starting server  at port 8001\n")
 	log.Fatal(http.ListenAndServe(":8001", handlers.CORS(originsOk, headersOk, methodsOk)(r)))
