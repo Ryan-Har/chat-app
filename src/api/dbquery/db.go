@@ -28,6 +28,7 @@ type DBQueryHandler interface {
 	LeaveChatParticipant(uuid string, userid int64, time string) ([][]any, error)
 	GetOngoingChatParticipants() ([][]any, error)
 	GetOngoingChatMessages() ([][]any, error)
+	GetUserInfoByID(id int64) ([][]any, error)
 }
 
 type PostgresDBConfig struct {
@@ -677,6 +678,38 @@ func (pqh PostgresQueryHandler) GetOngoingChatMessages() ([][]any, error) {
 	resp, ok := <-dbq.ReturnChan
 
 	log.Println("Get ongoing chat messages DB Response:", resp)
+
+	if !ok {
+		return resp, errors.New("channel closed, no data")
+	}
+	if err := checkSqlResponseForErrors(resp, dbq.ExpectSingleRow); err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// gives the user id, created at time and internal or external bool
+func (pqh PostgresQueryHandler) GetUserInfoByID(id int64) ([][]any, error) {
+	dbq := dbQuery{
+		Query: fmt.Sprintf(`SELECT u.id,
+						u.created_at::VARCHAR,
+						u.internal,
+						COALESCE(iu.firstname || ' ' || iu.surname, eu.name) AS name
+					FROM users u 
+						LEFT JOIN internal_users iu ON u.id = iu.user_id
+						LEFT JOIN external_users eu ON u.id = eu.user_id
+					WHERE u.id = %d`, id),
+		ReturnChan:              make(chan [][]interface{}),
+		NumberOfColumnsExpected: 4,
+		ExpectSingleRow:         true,
+	}
+
+	log.Println("Get user info by id DB Request:", dbq.Query)
+
+	pqh.RequestChan <- dbq
+	resp, ok := <-dbq.ReturnChan
+
+	log.Println("Get user info by id DB Response:", resp)
 
 	if !ok {
 		return resp, errors.New("channel closed, no data")

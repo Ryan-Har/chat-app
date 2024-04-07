@@ -4,26 +4,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"io"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/Ryan-Har/chat-app/src/app/chatstate"
 	"github.com/rabbitmq/amqp091-go"
 )
 
 var lavinmqHost string = os.Getenv("lavinmqHost")
 var lavinmqPort string = os.Getenv("lavinmqPort")
-var apiHost string = os.Getenv("apiHost")
-var apiPort string = os.Getenv("apiPort")
 
 var lavinMQURL string = fmt.Sprintf("amqp://guest:guest@%s:%s/", lavinmqHost, lavinmqPort)
-var apiBaseUrl string = fmt.Sprintf("http://%s:%s/api", apiHost, apiPort)
 
 const (
 	workerCount   = 5
-	internalQueue = "InternalQueue"
+	internalQueue = "AppQueue"
 )
 
 type BrokerMessage struct {
@@ -31,7 +28,8 @@ type BrokerMessage struct {
 	Name        string `json:"name"`
 	Address     string `json:"address"`
 	MessageText string `json:"messagetext"`
-	UserID      string `json:"userid"`
+	UserID      int64  `json:"userid"`
+	Time        string `json:"time"`
 }
 
 type worker struct {
@@ -39,76 +37,24 @@ type worker struct {
 	err error
 }
 
-type timeString string
-
-type ongoingChats map[string]timeString
-
-var oc = make(ongoingChats)
-
-func (oc ongoingChats) add(uuid string) {
-	timeLayout := "2006-01-02 15:04:05.999999"
-	oc[uuid] = timeString(time.Now().Format(timeLayout))
-}
-
-func (oc ongoingChats) remove(uuid string) {
-	delete(oc, uuid)
-}
-
-type ChatUuidTime struct {
-	ChatUUID string `json:"chatuuid"`
-	Time     string `json:"time"`
-}
-
-func (oc ongoingChats) populateFromDB() error {
-	url := apiBaseUrl + "/chat/inprogress"
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return err
-	}
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == 204 {
-		return nil
-	}
-	var chatTimeSlice = []ChatUuidTime{}
-	data, _ := io.ReadAll(resp.Body)
-	if err := json.Unmarshal(data, &chatTimeSlice); err != nil {
-		return err
-	}
-	timeLayoutdb := "2006-01-02 15:04:05.999999-07"
-	timeLayout := "2006-01-02 15:04:05.999999"
-	for i := range chatTimeSlice {
-		parsedTime, err := time.Parse(timeLayoutdb, chatTimeSlice[i].Time)
-		if err != nil {
-			return err
-		}
-		oc[chatTimeSlice[i].ChatUUID] = timeString(parsedTime.Format(timeLayout))
-	}
-	return nil
-}
-
-func workerManager() {
+func workerManager(stateHandler chatstate.ChatStateHandler) {
 	workerChan := make(chan *worker, workerCount)
 
 	for i := 0; i < workerCount; i++ {
 		i := i
 		wk := &worker{id: i}
-		go wk.workConsume(workerChan)
+		go wk.workConsume(workerChan, stateHandler)
 	}
 	for wk := range workerChan {
 		log.Printf("amqpWorker %d stopped with err: %s", wk.id, wk.err)
 		// reset err
 		wk.err = nil
 		// a goroutine has ended, restart it
-		wk.workConsume(workerChan)
+		wk.workConsume(workerChan, stateHandler)
 	}
 }
 
-func (wk *worker) workConsume(workerChan chan<- *worker) (err error) {
+func (wk *worker) workConsume(workerChan chan<- *worker, stateHandler chatstate.ChatStateHandler) (err error) {
 	// make my goroutine signal its death, whether it's a panic or a return
 	defer func() {
 		if r := recover(); r != nil {
@@ -168,7 +114,7 @@ func (wk *worker) workConsume(workerChan chan<- *worker) (err error) {
 	}
 
 	for msg := range msgs {
-		if err = processMessage(msg); err != nil {
+		if err = processMessage(msg, stateHandler); err != nil {
 			fmt.Println(err.Error())
 			panic(err)
 		}
@@ -177,34 +123,35 @@ func (wk *worker) workConsume(workerChan chan<- *worker) (err error) {
 	return err
 }
 
-func processMessage(msg amqp091.Delivery) error {
+func processMessage(msg amqp091.Delivery, stateHandler chatstate.ChatStateHandler) error {
 
 	bm := BrokerMessage{}
 	if err := json.Unmarshal(msg.Body, &bm); err != nil {
 		return err
 	}
+	log.Println("Received message:", bm)
+	switch bm.MessageText {
+	case "End of chat":
+		stateHandler.RemoveChat(bm.Roomid)
+		msg.Ack(false)
+	case "Start of chat":
+		stateHandler.AddChat(bm.Roomid, bm.Time)
+		msg.Ack(false)
+	case "User joined chat":
+		stateHandler.AddParticipant(bm.Roomid, bm.UserID)
+		msg.Ack(false)
+	case "User left chat":
+		stateHandler.RemoveParticipant(bm.Roomid, bm.UserID)
+		msg.Ack(false)
+	default: //must be a message
+		stateHandler.AddMessage(bm.Roomid, bm.UserID, bm.MessageText, bm.Time)
+		msg.Ack(false)
 
-	if bm.Name == "" && bm.Address == "" && bm.UserID == "" { //should only be call start and end messages
-		switch bm.MessageText {
-		case "End of chat":
-			oc.remove(bm.Roomid)
-			msg.Ack(false)
-
-		case "Start of chat":
-			oc.add(bm.Roomid)
-			msg.Ack(false)
-		}
-		return nil
 	}
 	return nil
 }
 
-type ChatContent struct {
-	Uuid      string     `json:"uuid"`
-	StartTime timeString `json:"starttime"`
-}
-
-func streamChats(w http.ResponseWriter, r *http.Request) {
+func streamChats(w http.ResponseWriter, r *http.Request, stateHandler chatstate.ChatStateHandler) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -212,17 +159,7 @@ func streamChats(w http.ResponseWriter, r *http.Request) {
 	flusher := w.(http.Flusher)
 
 	for {
-		var message = []ChatContent{}
-
-		for k, v := range oc {
-			chatContent := ChatContent{
-				Uuid:      k,
-				StartTime: v,
-			}
-			message = append(message, chatContent)
-		}
-
-		data, err := json.Marshal(message)
+		data, err := json.Marshal(stateHandler.GetChats())
 		if err != nil {
 			log.Println("Error marshalling message:", err)
 			return
@@ -266,11 +203,12 @@ func chatsPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-
-	if err := oc.populateFromDB(); err != nil {
-		log.Println("error populating from db", err.Error())
+	chatHandler, err := chatstate.NewChatStateHandler()
+	if err != nil {
+		log.Println("error creating chat state handler", err.Error())
 	}
-	go workerManager()
+
+	go workerManager(chatHandler)
 	// Handle the root URL
 
 	//serve js and css files
@@ -281,7 +219,9 @@ func main() {
 	http.Handle("/js/", http.StripPrefix("/js/", jsfs))
 
 	//http.Handle("/login", http.StripPrefix("/web/", http.FileServer(http.Dir("web"))))
-	http.HandleFunc("/chatsstream", streamChats)
+	http.HandleFunc("/chatsstream", func(w http.ResponseWriter, r *http.Request) {
+		streamChats(w, r, chatHandler)
+	})
 	http.HandleFunc("/chats", chatsPage)
 	http.HandleFunc("/login", loginPage)
 	http.ListenAndServe(":8005", nil)

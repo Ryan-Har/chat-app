@@ -471,21 +471,15 @@ func chatParticipantUpdate(w http.ResponseWriter, r *http.Request, dbqh dbquery.
 		return
 	}
 
-	idint64, err := strconv.ParseInt(jl.UserID, 10, 64)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	if r.Method == "POST" {
 		log.Println("Join chat participant api request:", jl)
-		if _, err := dbqh.JoinChatParticipant(jl.ChatUUID, idint64, verifiedTime); err != nil {
+		if _, err := dbqh.JoinChatParticipant(jl.ChatUUID, jl.UserID, verifiedTime); err != nil {
 			verifyDBErrorsAndReturn(w, err)
 			return
 		}
 	} else if r.Method == "PUT" {
 		log.Println("Leave chat participant api request:", jl)
-		if _, err := dbqh.LeaveChatParticipant(jl.ChatUUID, idint64, verifiedTime); err != nil {
+		if _, err := dbqh.LeaveChatParticipant(jl.ChatUUID, jl.UserID, verifiedTime); err != nil {
 			verifyDBErrorsAndReturn(w, err)
 			return
 		}
@@ -668,6 +662,52 @@ func GetAllOngoingChatInformation(w http.ResponseWriter, dbqh dbquery.DBQueryHan
 
 }
 
+type BasicUserInfo struct {
+	ID          int64  `json:"id"`
+	TimeCreated string `json:"timecreated"`
+	Internal    bool   `json:"internal"`
+	Name        string `json:"name"`
+}
+
+func getUserInfoByID(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQueryHandler) {
+	enableCors(&w)
+	respondJson(&w)
+
+	idString := mux.Vars(r)["id"]
+	idInt, err := strconv.Atoi(idString)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	bui := &BasicUserInfo{}
+	bui.ID = int64(idInt)
+
+	log.Println("Get internal user by ID api request:", bui.ID)
+
+	resp, err := dbqh.GetUserInfoByID(bui.ID)
+	if err != nil {
+		verifyDBErrorsAndReturn(w, err)
+		return
+	}
+
+	structToVerify := BasicUserInfo{}
+	intToStruct := interface{}(&structToVerify)
+
+	if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+		return
+	}
+
+	err = json.NewEncoder(w).Encode(structToVerify)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error converting result to JSON")
+		return
+	}
+}
+
 // takes a slice of fields provided by a db query and a struct as an interface and converts to the requested struct as an interface.
 func convertSliceToStruct(sl []interface{}, str interface{}) error {
 	//TODO: add checking for this function to ensure that the length of each interface is correct.
@@ -744,7 +784,7 @@ type ChatParticipantWithUuid struct {
 type JoinLeave struct {
 	ChatUUID string `json:"chatuuid"`
 	Time     string `json:"time"`
-	UserID   string `json:"userid"`
+	UserID   int64  `json:"userid"`
 }
 
 type ChatUuidTime struct {
@@ -891,6 +931,9 @@ func main() {
 	}).Methods("GET")
 	r.HandleFunc("/api/chat/inprogress/info", func(w http.ResponseWriter, r *http.Request) {
 		GetAllOngoingChatInformation(w, dbQueryHandler)
+	}).Methods("GET")
+	r.HandleFunc("/api/users/getbasicbyid/{id}", func(w http.ResponseWriter, r *http.Request) {
+		getUserInfoByID(w, r, dbQueryHandler)
 	}).Methods("GET")
 
 	fmt.Printf("Starting server  at port 8001\n")

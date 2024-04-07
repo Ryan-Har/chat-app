@@ -20,7 +20,7 @@ import (
 type UserInfo struct {
 	Conn   *websocket.Conn
 	Name   string
-	UserID string //corresponding id of user in database, if it exists
+	UserID int64 //corresponding id of user in database, if it exists
 	IPAddr string
 }
 
@@ -47,7 +47,7 @@ type BrokerMessage struct {
 	Name        string `json:"name"`
 	Address     string `json:"address"`
 	MessageText string `json:"messagetext"`
-	UserID      string `json:"userid"`
+	UserID      int64  `json:"userid"`
 	Time        string `json:"time"`
 }
 
@@ -58,6 +58,9 @@ func sendToBroker(message *BrokerMessage) error {
 	if err != nil {
 		return err
 	}
+	var newMessage BrokerMessage
+	json.Unmarshal(b, &newMessage)
+	fmt.Println(newMessage)
 
 	msg := amqp091.Publishing{
 		DeliveryMode: amqp091.Persistent,
@@ -203,12 +206,13 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	name := r.URL.Query().Get("name")
 
-	userid := r.URL.Query().Get("userid")
+	urluserid := r.URL.Query().Get("userid")
+	var userid int64
 	// connect to api and check if user exists already by comparing the
 	// the ip and name provided to records.
 	// if it doesn't exist then create an external user for them and retrieve the
 	// new id for use here
-	if userid == "" && name != "" { //external users will provide name and no id
+	if urluserid == "" && name != "" { //external users will provide name and no id
 		log.Println("external user joining")
 		body := ExternalUserInfo{
 			Name:   name,
@@ -235,19 +239,19 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(data, &body); err != nil {
 				log.Println("error unmarshalling json with status code 204", err)
 			}
-			userid = fmt.Sprint(body.ID)
+			userid = body.ID
 		} else {
 			data, _ := io.ReadAll(resp.Body)
 			if err := json.Unmarshal(data, &body); err != nil {
 				log.Printf("error unmarshalling json with status code %d: %v \n", resp.StatusCode, err.Error())
 			}
-			userid = fmt.Sprint(body.ID)
+			userid = body.ID
 		}
-	} else if name == "" && userid != "" { //internal users will provide id but no name
+	} else if name == "" && urluserid != "" { //internal users will provide id but no name
 		log.Println("internal user joining")
 		var iui *InternalUserInfo
 
-		resp, err := sendGetRequest(apiBaseUrl+"/users/getinternalbyid/"+userid, nil)
+		resp, err := sendGetRequest(apiBaseUrl+"/users/getinternalbyid/"+urluserid, nil)
 		if err != nil {
 			return
 		}
@@ -259,6 +263,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		name = fmt.Sprintf("%s %s", iui.FirstName, iui.Surname)
+		userid = iui.ID
 	}
 
 	//extract just the ip address from the remote connection

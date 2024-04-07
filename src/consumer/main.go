@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -27,7 +26,7 @@ var apiBaseUrl string = fmt.Sprintf("http://%s:%s/api", apiHost, apiPort)
 const (
 	chatQueue     = "ChatUpdateQueue"
 	workerCount   = 5
-	internalQueue = "InternalQueue"
+	internalQueue = "AppQueue"
 )
 
 type BrokerMessage struct {
@@ -35,7 +34,7 @@ type BrokerMessage struct {
 	Name        string `json:"name"`
 	Address     string `json:"address"`
 	MessageText string `json:"messagetext"`
-	UserID      string `json:"userid"`
+	UserID      int64  `json:"userid"`
 	Time        string `json:"time"`
 }
 
@@ -244,7 +243,7 @@ type ChatMessage struct {
 type JoinLeave struct {
 	ChatUUID string `json:"chatuuid"`
 	Time     string `json:"time"`
-	UserID   string `json:"userid"`
+	UserID   int64  `json:"userid"`
 }
 
 func processMessage(msg amqp091.Delivery) error {
@@ -329,7 +328,7 @@ func processMessage(msg amqp091.Delivery) error {
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode == 422 {
-			log.Printf("Participant join api request for uuid %s resulted in 422, requeue", body)
+			log.Printf("Participant join api request for uuid %s resulted in 422, requeue", body.ChatUUID)
 			msg.Nack(false, true)
 			return err
 		}
@@ -359,7 +358,7 @@ func processMessage(msg amqp091.Delivery) error {
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode == 422 {
-			log.Printf("Participant leave api request for uuid %s resulted in 422, requeue", body)
+			log.Printf("Participant leave api request for uuid %s resulted in 422, requeue", body.ChatUUID)
 			msg.Nack(false, true)
 			return err
 		}
@@ -373,10 +372,9 @@ func processMessage(msg amqp091.Delivery) error {
 		msg.Ack(false)
 
 	default: //must be a message
-		i, _ := strconv.ParseInt(bm.UserID, 10, 64)
 		body := ChatMessage{
 			ChatUUID: bm.Roomid,
-			UserID:   i,
+			UserID:   bm.UserID,
 			Message:  bm.MessageText,
 			Time:     bm.Time,
 		}
