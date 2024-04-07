@@ -616,7 +616,6 @@ func (pqh PostgresQueryHandler) LeaveChatParticipant(uuid string, userid int64, 
 func (pqh PostgresQueryHandler) GetOngoingChatParticipants() ([][]any, error) {
 	dbq := dbQuery{
 		Query: `SELECT c.uuid::VARCHAR,
-				c.start_time::VARCHAR,
 				p.user_id,
 				CASE WHEN p.time_left IS NULL THEN TRUE ELSE FALSE END AS active,
 				u.internal,
@@ -633,7 +632,7 @@ func (pqh PostgresQueryHandler) GetOngoingChatParticipants() ([][]any, error) {
 			LEFT JOIN external_users eu ON u.id = eu.user_id
 			ORDER BY uuid`,
 		ReturnChan:              make(chan [][]interface{}),
-		NumberOfColumnsExpected: 6,
+		NumberOfColumnsExpected: 5,
 		ExpectSingleRow:         false,
 	}
 

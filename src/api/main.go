@@ -223,11 +223,13 @@ func updateChatStatus(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQue
 		log.Println("Chat start api request:", cut.ChatUUID)
 		if _, err := dbqh.ChatStart(cut.ChatUUID, verifiedTime); err != nil {
 			verifyDBErrorsAndReturn(w, err)
+			return
 		}
 	} else {
 		log.Println("Chat end api request:", cut.ChatUUID)
 		if _, err := dbqh.ChatEnd(cut.ChatUUID, verifiedTime); err != nil {
 			verifyDBErrorsAndReturn(w, err)
+			return
 		}
 	}
 }
@@ -366,7 +368,7 @@ func addMessage(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQueryHand
 	enableCors(&w)
 	respondJson(&w)
 
-	var cm *ChatMessage
+	var cm *ChatMessageWithUuid
 	err := json.NewDecoder(r.Body).Decode(&cm)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -396,10 +398,10 @@ func getAllMessages(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQuery
 		return
 	}
 
-	respSlice := []ChatMessage{}
+	respSlice := []ChatMessageWithUuid{}
 
 	for i := range resp {
-		structToVerify := ChatMessage{}
+		structToVerify := ChatMessageWithUuid{}
 		intToStruct := interface{}(&structToVerify)
 
 		if err := convertSliceToStruct(resp[i], intToStruct); err != nil {
@@ -427,6 +429,7 @@ func getChatsInProgress(w http.ResponseWriter, dbqh dbquery.DBQueryHandler) {
 	resp, err := dbqh.GetAllChatsInProgress()
 	if err != nil {
 		verifyDBErrorsAndReturn(w, err)
+		return
 	}
 
 	respSlice := []ChatUuidTime{}
@@ -478,11 +481,13 @@ func chatParticipantUpdate(w http.ResponseWriter, r *http.Request, dbqh dbquery.
 		log.Println("Join chat participant api request:", jl)
 		if _, err := dbqh.JoinChatParticipant(jl.ChatUUID, idint64, verifiedTime); err != nil {
 			verifyDBErrorsAndReturn(w, err)
+			return
 		}
 	} else if r.Method == "PUT" {
 		log.Println("Leave chat participant api request:", jl)
 		if _, err := dbqh.LeaveChatParticipant(jl.ChatUUID, idint64, verifiedTime); err != nil {
 			verifyDBErrorsAndReturn(w, err)
+			return
 		}
 	} else {
 		http.Error(w, errors.New("only POST or PUT requests accepted").Error(), http.StatusBadRequest)
@@ -499,12 +504,13 @@ func GetAllOngoingChatParticipants(w http.ResponseWriter, dbqh dbquery.DBQueryHa
 	resp, err := dbqh.GetOngoingChatParticipants()
 	if err != nil {
 		verifyDBErrorsAndReturn(w, err)
+		return
 	}
 
-	respSlice := []chatParticipant{}
+	respSlice := []ChatParticipantWithUuid{}
 
 	for i := range resp {
-		structToVerify := chatParticipant{}
+		structToVerify := ChatParticipantWithUuid{}
 		intToStruct := interface{}(&structToVerify)
 
 		if err := convertSliceToStruct(resp[i], intToStruct); err != nil {
@@ -532,12 +538,13 @@ func GetAllOngoingChatMessages(w http.ResponseWriter, dbqh dbquery.DBQueryHandle
 	resp, err := dbqh.GetOngoingChatMessages()
 	if err != nil {
 		verifyDBErrorsAndReturn(w, err)
+		return
 	}
 
-	respSlice := []ChatMessage{}
+	respSlice := []ChatMessageWithUuid{}
 
 	for i := range resp {
-		structToVerify := ChatMessage{}
+		structToVerify := ChatMessageWithUuid{}
 		intToStruct := interface{}(&structToVerify)
 
 		if err := convertSliceToStruct(resp[i], intToStruct); err != nil {
@@ -556,6 +563,111 @@ func GetAllOngoingChatMessages(w http.ResponseWriter, dbqh dbquery.DBQueryHandle
 	}
 }
 
+func GetAllOngoingChatInformation(w http.ResponseWriter, dbqh dbquery.DBQueryHandler) {
+	enableCors(&w)
+	respondJson(&w)
+
+	log.Println("Get all ongoing chat information api request:")
+
+	cmresp, err := dbqh.GetOngoingChatMessages()
+	if err != nil {
+		verifyDBErrorsAndReturn(w, err)
+		return
+	}
+	cmSlice := []ChatMessageWithUuid{}
+
+	for i := range cmresp {
+		structToVerify := ChatMessageWithUuid{}
+		intToStruct := interface{}(&structToVerify)
+
+		if err := convertSliceToStruct(cmresp[i], intToStruct); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+			return
+		}
+		cmSlice = append(cmSlice, structToVerify)
+	}
+
+	cpresp, err := dbqh.GetOngoingChatParticipants()
+	if err != nil {
+		verifyDBErrorsAndReturn(w, err)
+		return
+	}
+	cpSlice := []ChatParticipantWithUuid{}
+
+	for i := range cpresp {
+		structToVerify := ChatParticipantWithUuid{}
+		intToStruct := interface{}(&structToVerify)
+
+		if err := convertSliceToStruct(cpresp[i], intToStruct); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+			return
+		}
+		cpSlice = append(cpSlice, structToVerify)
+	}
+
+	ctresp, err := dbqh.GetAllChatsInProgress()
+	if err != nil {
+		verifyDBErrorsAndReturn(w, err)
+		return
+	}
+	ctSlice := []ChatUuidTime{}
+
+	for i := range ctresp {
+		structToVerify := ChatUuidTime{}
+		intToStruct := interface{}(&structToVerify)
+
+		if err := convertSliceToStruct(ctresp[i], intToStruct); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+			return
+		}
+		ctSlice = append(ctSlice, structToVerify)
+	}
+
+	chatInfo := []ChatInformation{}
+
+	for i := range ctSlice {
+		chat := ChatInformation{}
+		chat.ChatUUID = ctSlice[i].ChatUUID
+		chat.ChatStartTime = ctSlice[i].Time
+
+		for j := range cpSlice {
+			if cpSlice[j].ChatUUID == ctSlice[i].ChatUUID {
+				participant := ChatParticipant{
+					UserID:   cpSlice[j].UserID,
+					Active:   cpSlice[j].Active,
+					Internal: cpSlice[j].Internal,
+					Name:     cpSlice[j].Name,
+				}
+				chat.Participants = append(chat.Participants, participant)
+			}
+		}
+
+		for k := range cmSlice {
+			if cmSlice[k].ChatUUID == ctSlice[i].ChatUUID {
+				message := ChatMessage{
+					UserID:  cmSlice[k].UserID,
+					Message: cmSlice[k].Message,
+					Time:    cmSlice[k].Time,
+				}
+				chat.Messages = append(chat.Messages, message)
+			}
+		}
+
+		chatInfo = append(chatInfo, chat)
+	}
+
+	err = json.NewEncoder(w).Encode(chatInfo)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error converting result to JSON")
+		return
+	}
+
+}
+
 // takes a slice of fields provided by a db query and a struct as an interface and converts to the requested struct as an interface.
 func convertSliceToStruct(sl []interface{}, str interface{}) error {
 	//TODO: add checking for this function to ensure that the length of each interface is correct.
@@ -571,6 +683,7 @@ func convertSliceToStruct(sl []interface{}, str interface{}) error {
 			}
 
 			field := strValue.Elem().Field(i)
+			fmt.Printf("content: %v, field type: %v\n", sl[i], field.Kind())
 			if field.CanSet() {
 				// Set a value based on the field type
 				switch field.Kind() {
@@ -600,13 +713,32 @@ func convertSliceToStruct(sl []interface{}, str interface{}) error {
 	}
 }
 
-type chatParticipant struct {
-	ChatUUID  string `json:"chatuuid"`
-	StartTime string `json:"starttime"`
-	UserID    int64  `json:"userid"`
-	Active    bool   `json:"active"`
-	Internal  bool   `json:"internal"`
-	Name      string `json:"name"`
+type ChatInformation struct {
+	ChatUUID      string            `json:"chatuuid"`      // UUID of the chat
+	Participants  []ChatParticipant `json:"participants"`  // List of participants in the chat
+	Messages      []ChatMessage     `json:"messages"`      // List of messages in the chat
+	ChatStartTime string            `json:"chatStartTime"` // Time the chat started (datetime format)
+}
+
+type ChatParticipant struct {
+	UserID   int64  `json:"userid"`
+	Active   bool   `json:"active"`
+	Internal bool   `json:"internal"`
+	Name     string `json:"name"`
+}
+
+type ChatMessage struct {
+	UserID  int64  `json:"userid"`
+	Message string `json:"message"`
+	Time    string `json:"time"`
+}
+
+type ChatParticipantWithUuid struct {
+	ChatUUID string `json:"chatuuid"`
+	UserID   int64  `json:"userid"`
+	Active   bool   `json:"active"`
+	Internal bool   `json:"internal"`
+	Name     string `json:"name"`
 }
 
 type JoinLeave struct {
@@ -629,7 +761,7 @@ type InternalUserInfo struct {
 	HashedPassword string `json:"password"`
 }
 
-type ChatMessage struct {
+type ChatMessageWithUuid struct {
 	ChatUUID string `json:"chatuuid"`
 	UserID   int64  `json:"userid"`
 	Message  string `json:"message"`
@@ -745,17 +877,20 @@ func main() {
 	r.HandleFunc("/api/chat/getallmessages/{uuid}", func(w http.ResponseWriter, r *http.Request) {
 		getAllMessages(w, r, dbQueryHandler)
 	}).Methods("GET")
-	r.HandleFunc("/api/chat/inprogress", func(w http.ResponseWriter, r *http.Request) {
-		getChatsInProgress(w, dbQueryHandler)
-	}).Methods("GET")
 	r.HandleFunc("/api/chat/participantupdate", func(w http.ResponseWriter, r *http.Request) {
 		chatParticipantUpdate(w, r, dbQueryHandler)
 	}).Methods("POST", "PUT")
+	r.HandleFunc("/api/chat/inprogress/time", func(w http.ResponseWriter, r *http.Request) {
+		getChatsInProgress(w, dbQueryHandler)
+	}).Methods("GET")
 	r.HandleFunc("/api/chat/inprogress/messages", func(w http.ResponseWriter, r *http.Request) {
 		GetAllOngoingChatMessages(w, dbQueryHandler)
 	}).Methods("GET")
 	r.HandleFunc("/api/chat/inprogress/participants", func(w http.ResponseWriter, r *http.Request) {
 		GetAllOngoingChatParticipants(w, dbQueryHandler)
+	}).Methods("GET")
+	r.HandleFunc("/api/chat/inprogress/info", func(w http.ResponseWriter, r *http.Request) {
+		GetAllOngoingChatInformation(w, dbQueryHandler)
 	}).Methods("GET")
 
 	fmt.Printf("Starting server  at port 8001\n")
