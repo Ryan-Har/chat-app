@@ -1,5 +1,3 @@
-{{ define "content" }}
-<div class="container max-height">
     <div class="columns col-gapless max-height">
         <div class="column col-3 max-height">
             <div class="panel max-height">
@@ -9,7 +7,7 @@
                 <div class="panel-nav">
                     <!-- navigation components: tabs, breadcrumbs or pagination -->
                 </div>
-                <div class="panel-body max-height">
+                <div class="panel-body max-height" id="left-chat-body">
                     
                     <div class="tile tile-centered chat-tile">
                         <div class="tile-content">
@@ -55,9 +53,9 @@
         <div class="column col-9 max-height" id="message-col">
             <div class="panel max-height">
                 <div class="panel-header">
-                    <div class="panel-title h6">Comments</div>
+                    <div class="panel-title h6">Chat</div>
                 </div>
-                <div class="panel-body max-height">
+                <div class="panel-body max-height" id="right-chat-body">
                     <div class="tile">
                         <div class="tile-icon">
                             <figure class="avatar"><img src="../img/avatar-1.png" ></figure>
@@ -257,5 +255,3 @@
         </div>
     </div>
 </div>
-</div>
-{{ end }}

@@ -174,9 +174,9 @@ func streamChats(w http.ResponseWriter, r *http.Request, stateHandler chatstate.
 
 func loginPage(w http.ResponseWriter, r *http.Request) {
 
-	tmpl := template.Must(template.ParseFiles("templates/base.html", "templates/login.html"))
+	tmpl := template.Must(template.ParseFiles("templates/login.html"))
 
-	err := tmpl.ExecuteTemplate(w, "base.html", map[string]interface{}{
+	err := tmpl.ExecuteTemplate(w, "login.html", map[string]interface{}{
 		"Title":    "Login Page",
 		"ChatHost": os.Getenv("chatHost"),
 		"ChatPort": os.Getenv("chatPort"),
@@ -187,15 +187,23 @@ func loginPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func chatsPage(w http.ResponseWriter, r *http.Request) {
-
-	tmpl := template.Must(template.ParseFiles("templates/base.html", "templates/navbar.html", "templates/chats.html"))
-
+func mainPage(w http.ResponseWriter, r *http.Request) {
+	tmpl := template.Must(template.ParseFiles("templates/base.html", "templates/navbar.html"))
 	err := tmpl.ExecuteTemplate(w, "base.html", map[string]interface{}{
-		"Title":    "Chats Page",
+		"Title":    "Chat App",
 		"ChatHost": os.Getenv("chatHost"),
 		"ChatPort": os.Getenv("chatPort"),
 	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func chatPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	tmpl := template.Must(template.ParseFiles("templates/chats.html"))
+	err := tmpl.ExecuteTemplate(w, "chats.html", nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -219,10 +227,11 @@ func main() {
 	http.Handle("/js/", http.StripPrefix("/js/", jsfs))
 
 	//http.Handle("/login", http.StripPrefix("/web/", http.FileServer(http.Dir("web"))))
-	http.HandleFunc("/chatsstream", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/chatstream", func(w http.ResponseWriter, r *http.Request) {
 		streamChats(w, r, chatHandler)
 	})
-	http.HandleFunc("/chats", chatsPage)
+	http.HandleFunc("/", mainPage)
 	http.HandleFunc("/login", loginPage)
+	http.HandleFunc("/chats", chatPage)
 	http.ListenAndServe(":8005", nil)
 }
