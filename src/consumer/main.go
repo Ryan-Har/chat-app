@@ -392,6 +392,7 @@ func processMessage(msg amqp091.Delivery) error {
 			msg.Nack(false, true)
 			return err
 		}
+		sendToInternalQueue(&bm)
 		msg.Ack(false)
 	}
 
