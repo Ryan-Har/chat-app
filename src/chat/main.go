@@ -303,6 +303,21 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Add the client to the room
 	room[guid][conn] = &userinfo
 
+	// Broadcast the user joined message to all clients in the room
+	for client := range room[guid] {
+		if room[guid][client].Conn == conn {
+			if err := client.WriteMessage(websocket.TextMessage, []byte("connected to chat")); err != nil {
+				log.Println(err)
+				return
+			}
+		} else {
+			if err := client.WriteMessage(websocket.TextMessage, []byte(userinfo.Name+" joined the chat")); err != nil {
+				log.Println(err)
+				return
+			}
+		}
+	}
+
 	//send user joined message to broker
 	brokerMessage := BrokerMessage{
 		Roomid:      guid,
@@ -348,6 +363,14 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Remove the client from the room when the connection is closed
 	delete(room[guid], conn)
+
+	// Broadcast the user left message to all clients in the room
+	for client := range room[guid] {
+		if err := client.WriteMessage(websocket.TextMessage, []byte(userinfo.Name+" left the chat")); err != nil {
+			log.Println(err)
+			return
+		}
+	}
 
 	//send user left message to broker
 	brokerMessage = BrokerMessage{
