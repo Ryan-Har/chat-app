@@ -54,15 +54,12 @@ class SocketConnections {
   
     // Method to close a websocket connection
     closeConnection(guid) {
+        console.log("Closing connection:", guid)
         const ws = this.connections[guid];
         let displayLoc = document.getElementById("right-chat-body");
         displayLoc.innerHTML = "";
         this.activeConnection = "";
-        if (ws && ws.readyState !== WebSocket.CLOSED) {
         ws.close();
-        return true; // Connection closed successfully
-        }
-        return false; // Connection already closed or not found
     }
 
     renderSingleMessageToChatInterface(message) {
@@ -162,7 +159,7 @@ function showleaveButton(guid) {
     let leaveButton = document.getElementById("leave");
     leaveButton.style.display = "block";
     leaveButton.onclick = function() {
-        sockets.closeConnection();
+        sockets.closeConnection(guid);
         leaveButton.style.display = "none";
     }
 }

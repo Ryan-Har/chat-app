@@ -176,6 +176,13 @@ func (suh *StateUpdateHandler) AddParticipant(chatUUID string, userID int64) {
 	defer suh.mutex.Unlock()
 	for i, chat := range suh.Chats {
 		if chat.ChatUUID == chatUUID {
+			//just set active if already in chat
+			for j, participant := range suh.Chats[i].Participants {
+				if participant.UserID == userID {
+					suh.Chats[i].Participants[j].Active = true
+					return
+				}
+			}
 			suh.Chats[i].Participants = append(suh.Chats[i].Participants, ChatParticipant{
 				UserID:   userID,
 				Active:   true,
