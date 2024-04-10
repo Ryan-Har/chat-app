@@ -53,8 +53,11 @@ class SocketConnections {
     }
   
     // Method to close a websocket connection
-    closeConnection() {
-        const ws = this.connections[this.activeConnection];
+    closeConnection(guid) {
+        const ws = this.connections[guid];
+        let displayLoc = document.getElementById("right-chat-body");
+        displayLoc.innerHTML = "";
+        this.activeConnection = "";
         if (ws && ws.readyState !== WebSocket.CLOSED) {
         ws.close();
         return true; // Connection closed successfully
@@ -74,10 +77,14 @@ class SocketConnections {
         this.messages[guid].forEach(message => {
             displayLoc.appendChild(createTileDiv(message, ""));
         });
+        showleaveButton(guid);
     }
     
 
     setActiveConnection(guid) {
+        if (guid === "") {
+
+        }
         this.activeConnection = guid;
     }
 
@@ -149,4 +156,13 @@ function createTileDiv(nameMessage, avatarSrc) {
     tileDiv.appendChild(tileContentDiv);
 
     return tileDiv;
+}
+
+function showleaveButton(guid) {
+    let leaveButton = document.getElementById("leave");
+    leaveButton.style.display = "block";
+    leaveButton.onclick = function() {
+        sockets.closeConnection();
+        leaveButton.style.display = "none";
+    }
 }
