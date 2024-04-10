@@ -168,7 +168,7 @@ func streamChats(w http.ResponseWriter, r *http.Request, stateHandler chatstate.
 		fmt.Fprintf(w, "data: %s\n\n", string(data))
 		flusher.Flush()
 
-		time.Sleep(5 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 }
 
