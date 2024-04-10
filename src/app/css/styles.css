@@ -39,3 +39,44 @@ body.center-vertically {
 .tile-title span {
     margin-left: auto;
 }
+
+.chip {
+    align-items: center;
+    background: #b4b6b5;
+    border-radius: 5rem;
+    display: -ms-inline-flexbox;
+    display: inline-flex;
+    -ms-flex-align: center;
+    font-size: 90%;
+    height: 1.2rem;
+    line-height: .8rem;
+    margin: .1rem;
+    max-width: 320px;
+    overflow: hidden;
+    padding: .2rem .4rem;
+    text-decoration: none;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+.tile-action {
+    display: flex;
+    align-items: left;
+}
+
+.tile-action button {
+    margin-left: auto;
+}
+
+p.tile-title {
+    margin: 0;
+}
+
+.panel-header.right {
+    display: flex;
+}
+
+#leave {
+    margin-left: auto;
+}
