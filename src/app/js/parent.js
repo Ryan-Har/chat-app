@@ -78,14 +78,17 @@ function startIntervalForChildPage() {
     clearInterval(intervalId);
     console.log(currentPage)
     if (currentPage === "allChats") {
+        displayAllChats();
         intervalId = setInterval(function() {
             displayAllChats();
         }, 1000);
     } else if (currentPage === "myChats") {
+        displayMyChats();
         intervalId = setInterval(function() {
             displayMyChats();
         }, 1000);
     } else if (currentPage === "availableChats") {
+        displayAvailableChats();
         intervalId = setInterval(function() {
             displayAvailableChats();
         }, 1000);
