@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -25,9 +24,9 @@ var lavinMQURL string = fmt.Sprintf("amqp://guest:guest@%s:%s/", lavinmqHost, la
 var apiBaseUrl string = fmt.Sprintf("http://%s:%s/api", apiHost, apiPort)
 
 const (
-	chatQueue     = "ChatMessageQueue"
+	chatQueue     = "ChatUpdateQueue"
 	workerCount   = 5
-	internalQueue = "InternalQueue"
+	internalQueue = "AppQueue"
 )
 
 type BrokerMessage struct {
@@ -35,7 +34,8 @@ type BrokerMessage struct {
 	Name        string `json:"name"`
 	Address     string `json:"address"`
 	MessageText string `json:"messagetext"`
-	UserID      string `json:"userid"`
+	UserID      int64  `json:"userid"`
+	Time        string `json:"time"`
 }
 
 type worker struct {
@@ -166,7 +166,7 @@ func (wk *worker) workConsume(workerChan chan<- *worker) (err error) {
 			if err, ok := r.(error); ok {
 				wk.err = err
 			} else {
-				wk.err = fmt.Errorf("Panic happened with %v", r)
+				wk.err = fmt.Errorf("panic happened with %v", r)
 			}
 		} else {
 			wk.err = err
@@ -240,6 +240,12 @@ type ChatMessage struct {
 	Time     string `json:"time"`
 }
 
+type JoinLeave struct {
+	ChatUUID string `json:"chatuuid"`
+	Time     string `json:"time"`
+	UserID   int64  `json:"userid"`
+}
+
 func processMessage(msg amqp091.Delivery) error {
 
 	bm := BrokerMessage{}
@@ -247,89 +253,148 @@ func processMessage(msg amqp091.Delivery) error {
 		return err
 	}
 
-	if bm.Name == "" && bm.Address == "" && bm.UserID == "" { //should only be call start and end messages
-		switch bm.MessageText {
-		case "End of chat":
-			body := ChatUuidTime{
-				ChatUUID: bm.Roomid,
-				Time:     time.Now().Format("2006-01-02 15:04:05.999999"),
-			}
-			jsonBody, err := json.Marshal(body)
-			if err != nil {
-				return err
-			}
-			resp, err := sendPutRequest(apiBaseUrl+"/chat/statusupdate", bytes.NewReader(jsonBody))
-			if err != nil {
-				return err
-			}
-			defer resp.Body.Close()
-
-			//no content - nothing was updated, likely dealt with out of order, requeue
-			if resp.StatusCode == 204 {
-				log.Printf("End of chat api request for uuid %s resulted in 204, requeue", body.ChatUUID)
-				msg.Nack(false, true)
-				return err
-			}
-
-			respBody, err := io.ReadAll(resp.Body)
-			if err != nil {
-				fmt.Println("Error reading response body:", err)
-				return err
-			}
-			fmt.Println("resp body:", string(respBody))
-			sendToInternalQueue(&bm)
-			msg.Ack(false)
-
-		case "Start of chat":
-			body := ChatUuidTime{
-				ChatUUID: bm.Roomid,
-				Time:     time.Now().Format("2006-01-02 15:04:05.999999"),
-			}
-			jsonBody, err := json.Marshal(body)
-			if err != nil {
-				log.Println("error marshalling json:", body)
-				return err
-			}
-			resp, err := sendPostRequest(apiBaseUrl+"/chat/statusupdate", bytes.NewReader(jsonBody))
-			if err != nil {
-				return err
-			}
-			defer resp.Body.Close()
-
-			respBody, err := io.ReadAll(resp.Body)
-			if err != nil {
-				fmt.Println("Error reading response body:", err)
-				return err
-			}
-			fmt.Println("resp body:", string(respBody))
-			fmt.Println(err)
-			sendToInternalQueue(&bm)
-			msg.Ack(false)
+	switch bm.MessageText {
+	case "End of chat":
+		body := ChatUuidTime{
+			ChatUUID: bm.Roomid,
+			Time:     bm.Time,
 		}
-		return nil
+		jsonBody, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		resp, err := sendPutRequest(apiBaseUrl+"/chat/statusupdate", bytes.NewReader(jsonBody))
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		//no content - nothing was updated, likely dealt with out of order, requeue
+		if resp.StatusCode == 422 {
+			log.Printf("End of chat api request for uuid %s resulted in 422, requeue", body.ChatUUID)
+			msg.Nack(false, true)
+			return err
+		}
+
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Println("Error reading response body:", err)
+			return err
+		}
+		fmt.Println("resp body:", string(respBody))
+		sendToInternalQueue(&bm)
+		msg.Ack(false)
+
+	case "Start of chat":
+		body := ChatUuidTime{
+			ChatUUID: bm.Roomid,
+			Time:     bm.Time,
+		}
+		jsonBody, err := json.Marshal(body)
+		if err != nil {
+			log.Println("error marshalling json:", body)
+			return err
+		}
+		resp, err := sendPostRequest(apiBaseUrl+"/chat/statusupdate", bytes.NewReader(jsonBody))
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Println("Error reading response body:", err)
+			return err
+		}
+		fmt.Println("resp body:", string(respBody))
+		fmt.Println(err)
+		sendToInternalQueue(&bm)
+		msg.Ack(false)
+
+	case "User joined chat":
+		body := JoinLeave{
+			ChatUUID: bm.Roomid,
+			Time:     bm.Time,
+			UserID:   bm.UserID,
+		}
+		jsonBody, err := json.Marshal(body)
+		if err != nil {
+			log.Println("error marshalling json:", body)
+			return err
+		}
+		resp, err := sendPostRequest(apiBaseUrl+"/chat/participantupdate", bytes.NewReader(jsonBody))
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode == 422 {
+			log.Printf("Participant join api request for uuid %s resulted in 422, requeue", body.ChatUUID)
+			msg.Nack(false, true)
+			return err
+		}
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Println("Error reading response body:", err)
+			return err
+		}
+		fmt.Println("resp body:", string(respBody))
+		sendToInternalQueue(&bm)
+		msg.Ack(false)
+
+	case "User left chat":
+		body := JoinLeave{
+			ChatUUID: bm.Roomid,
+			Time:     bm.Time,
+			UserID:   bm.UserID,
+		}
+		jsonBody, err := json.Marshal(body)
+		if err != nil {
+			log.Println("error marshalling json:", body)
+			return err
+		}
+		resp, err := sendPutRequest(apiBaseUrl+"/chat/participantupdate", bytes.NewReader(jsonBody))
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode == 422 {
+			log.Printf("Participant leave api request for uuid %s resulted in 422, requeue", body.ChatUUID)
+			msg.Nack(false, true)
+			return err
+		}
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Println("Error reading response body:", err)
+			return err
+		}
+		fmt.Println("resp body:", string(respBody))
+		sendToInternalQueue(&bm)
+		msg.Ack(false)
+
+	default: //must be a message
+		body := ChatMessage{
+			ChatUUID: bm.Roomid,
+			UserID:   bm.UserID,
+			Message:  bm.MessageText,
+			Time:     bm.Time,
+		}
+		jsonBody, err := json.Marshal(body)
+		if err != nil {
+			log.Println("error marshalling json:", body)
+			return err
+		}
+		resp, err := sendPostRequest(apiBaseUrl+"/chat/addmessage", bytes.NewReader(jsonBody))
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode != 200 { //requeue
+			log.Printf("Addmsg api request for uuid %s resulted in %v, requeue", body.ChatUUID, resp.StatusCode)
+			msg.Nack(false, true)
+			return err
+		}
+		sendToInternalQueue(&bm)
+		msg.Ack(false)
 	}
-	i, _ := strconv.ParseInt(bm.UserID, 10, 64)
-	body := ChatMessage{
-		ChatUUID: bm.Roomid,
-		UserID:   i,
-		Message:  bm.MessageText,
-		Time:     time.Now().Format("2006-01-02 15:04:05.999999"),
-	}
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		log.Println("error marshalling json:", body)
-		return err
-	}
-	resp, err := sendPostRequest(apiBaseUrl+"/chat/addmessage", bytes.NewReader(jsonBody))
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != 200 { //requeue
-		log.Printf("Addmsg api request for uuid %s resulted in 204, requeue", body.ChatUUID)
-		msg.Nack(false, true)
-		return err
-	}
-	msg.Ack(false)
 
 	return nil
 }
@@ -373,6 +438,10 @@ func sendGetRequest(url string) (*http.Response, error) {
 		return nil, err
 	}
 	return resp, nil
+}
+
+func getTimeNow() string {
+	return time.Now().Format("2006-01-02 15:04:05.999999")
 }
 
 func main() {

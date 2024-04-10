@@ -1,0 +1,83 @@
+html, body {
+    background-color: #f0f0f0;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    height: 100%;
+}
+
+body.center-vertically {
+    height: 100vh; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center;
+}
+.tile.chat-tile {
+    padding: 5px;
+    transition: transform 0.1s;
+}
+
+.tile.chat-tile:hover {
+    transform: scale(1.05);
+    font-weight: bold;
+}
+
+.max-height {
+    height: 100%;
+}
+
+.panel-body {
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.tile-title {
+    display: flex;
+    align-items: center;
+}
+
+.tile-title span {
+    margin-left: auto;
+}
+
+.chip {
+    align-items: center;
+    background: #b4b6b5;
+    border-radius: 5rem;
+    display: -ms-inline-flexbox;
+    display: inline-flex;
+    -ms-flex-align: center;
+    font-size: 90%;
+    height: 1.2rem;
+    line-height: .8rem;
+    margin: .1rem;
+    max-width: 320px;
+    overflow: hidden;
+    padding: .2rem .4rem;
+    text-decoration: none;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+.tile-action {
+    display: flex;
+    align-items: left;
+}
+
+.tile-action button {
+    margin-left: auto;
+}
+
+p.tile-title {
+    margin: 0;
+}
+
+.panel-header.right {
+    display: flex;
+}
+
+#leave {
+    margin-left: auto;
+    display: none;
+}

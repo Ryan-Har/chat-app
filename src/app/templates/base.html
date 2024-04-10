@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="https://unpkg.com/spectre.css/dist/spectre.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/spectre.css/dist/spectre-exp.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/spectre.css/dist/spectre-icons.min.css">
+    <link href="/css/styles.css" rel="stylesheet" />
+    <script>
+        let chatHost = "{{.ChatHost}}";
+        let chatPort = "{{.ChatPort}}";
+    </script>
+    <script src="/js/socketConnections.js"></script>
+    <script src="/js/ssEvents.js"></script>
+    <script src="/js/parent.js"></script>
+</head>
+<body>
+    {{template "body" .}}
+</body>
+</html>

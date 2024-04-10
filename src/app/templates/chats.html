@@ -1,0 +1,36 @@
+    <div class="columns col-gapless max-height">
+        <div class="column col-3 max-height">
+            <div class="panel max-height">
+                <div class="panel-header">
+                    <div class="panel-title"></div>
+                </div>
+                <div class="panel-nav">
+                    <!-- navigation components: tabs, breadcrumbs or pagination -->
+                </div>
+                <div class="panel-body max-height" id="left-chat-body">
+                    <!-- chat list will be displayed here -->
+                </div>
+                <div class="panel-footer">
+                    <!-- footer contents -->
+                </div>
+            </div>
+        </div>
+        <div class="column col-9 max-height" id="message-col">
+            <div class="panel max-height">
+                <div class="panel-header right">
+                    <div class="panel-title h6">Chat</div>
+                    <button class="btn btn-error" id="leave">Leave Chat</button>
+                </div>
+                <div class="panel-body max-height" id="right-chat-body">
+                    <!-- chat messages will be displayed here -->
+                </div>
+            <div class="panel-footer fixed-bottom">
+                <div class="input-group">
+                    <input class="form-input" id="message-input" type="text" placeholder="message text here...">
+                    <button class="btn btn-primary input-group-btn" id="chat-send-button">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="/js/chat.js"></script>

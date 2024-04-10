@@ -20,7 +20,7 @@ import (
 type UserInfo struct {
 	Conn   *websocket.Conn
 	Name   string
-	UserID string //corresponding id of user in database, if it exists
+	UserID int64 //corresponding id of user in database, if it exists
 	IPAddr string
 }
 
@@ -33,7 +33,7 @@ var lavinMQURL string = fmt.Sprintf("amqp://guest:guest@%s:%s/", lavinmqHost, la
 var apiBaseUrl string = fmt.Sprintf("http://%s:%s/api", apiHost, apiPort)
 
 const (
-	queueName   = "ChatMessageQueue"
+	queueName   = "ChatUpdateQueue"
 	workerCount = 5
 )
 
@@ -47,7 +47,8 @@ type BrokerMessage struct {
 	Name        string `json:"name"`
 	Address     string `json:"address"`
 	MessageText string `json:"messagetext"`
-	UserID      string `json:"userid"`
+	UserID      int64  `json:"userid"`
+	Time        string `json:"time"`
 }
 
 var brokerSendingChan = make(chan amqp091.Publishing)
@@ -57,6 +58,9 @@ func sendToBroker(message *BrokerMessage) error {
 	if err != nil {
 		return err
 	}
+	var newMessage BrokerMessage
+	json.Unmarshal(b, &newMessage)
+	fmt.Println(newMessage)
 
 	msg := amqp091.Publishing{
 		DeliveryMode: amqp091.Persistent,
@@ -92,7 +96,7 @@ func (wk *worker) work(workerChan chan<- *worker, brokerchan chan amqp091.Publis
 			if err, ok := r.(error); ok {
 				wk.err = err
 			} else {
-				wk.err = fmt.Errorf("Panic happened with %v", r)
+				wk.err = fmt.Errorf("panic happened with %v", r)
 			}
 		} else {
 			wk.err = err
@@ -202,12 +206,13 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	name := r.URL.Query().Get("name")
 
-	userid := r.URL.Query().Get("userid")
+	urluserid := r.URL.Query().Get("userid")
+	var userid int64
 	// connect to api and check if user exists already by comparing the
 	// the ip and name provided to records.
 	// if it doesn't exist then create an external user for them and retrieve the
 	// new id for use here
-	if userid == "" && name != "" { //external users will provide name and no id
+	if urluserid == "" && name != "" { //external users will provide name and no id
 		log.Println("external user joining")
 		body := ExternalUserInfo{
 			Name:   name,
@@ -234,19 +239,19 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(data, &body); err != nil {
 				log.Println("error unmarshalling json with status code 204", err)
 			}
-			userid = fmt.Sprint(body.ID)
+			userid = body.ID
 		} else {
 			data, _ := io.ReadAll(resp.Body)
 			if err := json.Unmarshal(data, &body); err != nil {
 				log.Printf("error unmarshalling json with status code %d: %v \n", resp.StatusCode, err.Error())
 			}
-			userid = fmt.Sprint(body.ID)
+			userid = body.ID
 		}
-	} else if name == "" && userid != "" { //internal users will provide id but no name
+	} else if name == "" && urluserid != "" { //internal users will provide id but no name
 		log.Println("internal user joining")
 		var iui *InternalUserInfo
 
-		resp, err := sendGetRequest(apiBaseUrl+"/users/getinternalbyid/"+userid, nil)
+		resp, err := sendGetRequest(apiBaseUrl+"/users/getinternalbyid/"+urluserid, nil)
 		if err != nil {
 			return
 		}
@@ -258,6 +263,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		name = fmt.Sprintf("%s %s", iui.FirstName, iui.Surname)
+		userid = iui.ID
 	}
 
 	//extract just the ip address from the remote connection
@@ -285,6 +291,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		brokerMessage := BrokerMessage{
 			Roomid:      guid,
 			MessageText: "Start of chat",
+			Time:        getTimeNow(),
 		}
 
 		if err := sendToBroker(&brokerMessage); err != nil {
@@ -295,6 +302,34 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Add the client to the room
 	room[guid][conn] = &userinfo
+
+	// Broadcast the user joined message to all clients in the room
+	for client := range room[guid] {
+		if room[guid][client].Conn == conn {
+			if err := client.WriteMessage(websocket.TextMessage, []byte("connected to chat")); err != nil {
+				log.Println(err)
+				return
+			}
+		} else {
+			if err := client.WriteMessage(websocket.TextMessage, []byte(userinfo.Name+" joined the chat")); err != nil {
+				log.Println(err)
+				return
+			}
+		}
+	}
+
+	//send user joined message to broker
+	brokerMessage := BrokerMessage{
+		Roomid:      guid,
+		MessageText: "User joined chat",
+		UserID:      userinfo.UserID,
+		Time:        getTimeNow(),
+	}
+
+	if err := sendToBroker(&brokerMessage); err != nil {
+		log.Println(err)
+		return
+	}
 
 	// Listen for messages from the client
 	for {
@@ -310,6 +345,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			UserID:      userinfo.UserID,
 			Address:     userinfo.IPAddr,
 			MessageText: string(payload),
+			Time:        getTimeNow(),
 		}
 
 		if err := sendToBroker(&brokerMessage); err != nil {
@@ -328,10 +364,32 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Remove the client from the room when the connection is closed
 	delete(room[guid], conn)
 
+	// Broadcast the user left message to all clients in the room
+	for client := range room[guid] {
+		if err := client.WriteMessage(websocket.TextMessage, []byte(userinfo.Name+" left the chat")); err != nil {
+			log.Println(err)
+			return
+		}
+	}
+
+	//send user left message to broker
+	brokerMessage = BrokerMessage{
+		Roomid:      guid,
+		MessageText: "User left chat",
+		UserID:      userinfo.UserID,
+		Time:        getTimeNow(),
+	}
+
+	if err := sendToBroker(&brokerMessage); err != nil {
+		log.Println(err)
+		return
+	}
+
 	if len(room[guid]) == 0 {
 		brokerMessage := BrokerMessage{
 			Roomid:      guid,
 			MessageText: "End of chat",
+			Time:        getTimeNow(),
 		}
 		log.Println("End of chat:", guid)
 		if err := sendToBroker(&brokerMessage); err != nil {
@@ -371,6 +429,10 @@ func sendGetRequest(url string, content *bytes.Reader) (*http.Response, error) {
 		return nil, err
 	}
 	return resp, nil
+}
+
+func getTimeNow() string {
+	return time.Now().Format("2006-01-02 15:04:05.999999")
 }
 
 func main() {
