@@ -23,6 +23,7 @@ type ChatStateHandler interface {
 	AddMessage(chatUUID string, userID int64, message string, time string)
 	RemoveParticipant(chatUUID string, userID int64)
 	AddParticipant(chatUUID string, userID int64)
+	GetApiBaseUrl() string
 }
 
 type StateUpdateHandler struct {
@@ -192,6 +193,10 @@ func (suh *StateUpdateHandler) AddParticipant(chatUUID string, userID int64) {
 			break
 		}
 	}
+}
+
+func (suh *StateUpdateHandler) GetApiBaseUrl() string {
+	return suh.ApiBaseUrl
 }
 
 func sendGetRequest(url string) (*http.Response, error) {

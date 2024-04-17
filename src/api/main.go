@@ -708,6 +708,51 @@ func getUserInfoByID(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQuer
 	}
 }
 
+func loginWithUsernameAndPassword(w http.ResponseWriter, r *http.Request, dbqh dbquery.DBQueryHandler) {
+	enableCors(&w)
+	respondJson(&w)
+
+	var iui *InternalUserInfo
+	err := json.NewDecoder(r.Body).Decode(&iui)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if iui.EmailAddr == "" || iui.HashedPassword == "" {
+		http.Error(w, errors.New("email and password must be provided").Error(), http.StatusBadRequest)
+		return
+	}
+	log.Println("Login user api request")
+
+	resp, err := dbqh.GetInternalByEmail(iui.EmailAddr)
+	if err != nil {
+		verifyDBErrorsAndReturn(w, err)
+		return
+	}
+
+	structToVerify := InternalUserInfo{}
+	intToStruct := interface{}(&structToVerify)
+
+	if err := convertSliceToStruct(resp[0], intToStruct); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "error converting db results to struct. Error: %v", err.Error())
+		return
+	}
+
+	if structToVerify.HashedPassword != iui.HashedPassword {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	err = json.NewEncoder(w).Encode(structToVerify.ID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error converting result to JSON")
+		return
+	}
+}
+
 // takes a slice of fields provided by a db query and a struct as an interface and converts to the requested struct as an interface.
 func convertSliceToStruct(sl []interface{}, str interface{}) error {
 	//TODO: add checking for this function to ensure that the length of each interface is correct.
@@ -935,6 +980,9 @@ func main() {
 	r.HandleFunc("/api/users/getbasicbyid/{id}", func(w http.ResponseWriter, r *http.Request) {
 		getUserInfoByID(w, r, dbQueryHandler)
 	}).Methods("GET")
+	r.HandleFunc("/api/users/login", func(w http.ResponseWriter, r *http.Request) {
+		loginWithUsernameAndPassword(w, r, dbQueryHandler)
+	}).Methods("POST")
 
 	fmt.Printf("Starting server  at port 8001\n")
 	log.Fatal(http.ListenAndServe(":8001", handlers.CORS(originsOk, headersOk, methodsOk)(r)))

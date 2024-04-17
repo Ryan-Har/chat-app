@@ -1,20 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.Title}}</title>
-    <link rel="stylesheet" href="https://unpkg.com/spectre.css/dist/spectre.min.css">
-    <link rel="stylesheet" href="https://unpkg.com/spectre.css/dist/spectre-exp.min.css">
-    <link rel="stylesheet" href="https://unpkg.com/spectre.css/dist/spectre-icons.min.css">
-    <link href="/css/styles.css" rel="stylesheet" />
-    <script src="/js/scripts.js"></script>
-    <script>
-        var chatHost = "{{.ChatHost}}";
-        var chatPort = "{{.ChatPort}}";
-    </script>
-</head>
-<body class="center-vertically">
+<div class="center-vertically">
     <div class="container">
         <div class="columns">
             <div class="column col-4 col-mx-auto">
@@ -25,20 +9,19 @@
                     <div class="card-body">
                         <form>
                             <div class="form-group">
-                                <label class="form-label" for="username">Username</label>
-                                <input class="form-input" type="text" id="username" name="username" placeholder="Enter your username">
+                                <label class="form-label" for="email">Email</label>
+                                <input class="form-input" type="text" id="username" name="username" placeholder="Enter your email">
                             </div>
                             <div class="form-group">
                                 <label class="form-label" for="password">Password</label>
                                 <input class="form-input" type="password" id="password" name="password" placeholder="Enter your password">
                             </div>
-                            <button class="btn btn-primary" type="submit">Login</button>
+                            <button class="btn btn-primary" id="loginButton" type=button>Login</button>
                         </form>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
-</body>
-</html>
+    </div>
+<script src="/js/login.js"></script>
