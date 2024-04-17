@@ -49,9 +49,8 @@ document.addEventListener("DOMContentLoaded", function() {
         }
         if (receivedData.operation === "Login") {
             console.log("received login message");
-            myid = receivedData.message; 
-            if (myid > 0) {
-                window.auth.setAuthenticated(true);
+            myid = receivedData.message;
+            if (myid > 0) { 
                 setNavbarVisibility(true);
                 currentPage = "allChats";
                 loadChildPageContent(event, "/chats");
