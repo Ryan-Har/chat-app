@@ -29,6 +29,7 @@ type DBQueryHandler interface {
 	GetOngoingChatParticipants() ([][]any, error)
 	GetOngoingChatMessages() ([][]any, error)
 	GetUserInfoByID(id int64) ([][]any, error)
+	GetInternalByEmail(email string) ([][]any, error)
 }
 
 type PostgresDBConfig struct {
@@ -710,6 +711,31 @@ func (pqh PostgresQueryHandler) GetUserInfoByID(id int64) ([][]any, error) {
 	resp, ok := <-dbq.ReturnChan
 
 	log.Println("Get user info by id DB Response:", resp)
+
+	if !ok {
+		return resp, errors.New("channel closed, no data")
+	}
+	if err := checkSqlResponseForErrors(resp, dbq.ExpectSingleRow); err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+func (pqh PostgresQueryHandler) GetInternalByEmail(email string) ([][]any, error) {
+	dbq := dbQuery{
+		Query: fmt.Sprintf(`SELECT user_id, role_id, firstname, surname, email, password FROM internal_users WHERE email = %s`,
+			singleQuote(doubleUpSingleQuotes(email))),
+		ReturnChan:              make(chan [][]interface{}),
+		NumberOfColumnsExpected: 6,
+		ExpectSingleRow:         true,
+	}
+
+	log.Println("Get internal user by email DB Request:", dbq.Query)
+
+	pqh.RequestChan <- dbq
+	resp, ok := <-dbq.ReturnChan
+
+	log.Println("Get internal user by email Response:", resp)
 
 	if !ok {
 		return resp, errors.New("channel closed, no data")

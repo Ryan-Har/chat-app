@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -173,14 +175,9 @@ func streamChats(w http.ResponseWriter, r *http.Request, stateHandler chatstate.
 }
 
 func loginPage(w http.ResponseWriter, r *http.Request) {
-
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	tmpl := template.Must(template.ParseFiles("templates/login.html"))
-
-	err := tmpl.ExecuteTemplate(w, "login.html", map[string]interface{}{
-		"Title":    "Login Page",
-		"ChatHost": os.Getenv("chatHost"),
-		"ChatPort": os.Getenv("chatPort"),
-	})
+	err := tmpl.ExecuteTemplate(w, "login.html", nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -210,6 +207,62 @@ func chatPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type loginInfo struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+func loginWithUsernameAndPassword(w http.ResponseWriter, r *http.Request, apiBaseUrl string) {
+	w.Header().Set("Content-Type", "text/plain")
+	fmt.Println(r.Body)
+	fmt.Printf("apiBaseUrl: %s\n", apiBaseUrl)
+
+	var li *loginInfo
+	err := json.NewDecoder(r.Body).Decode(&li)
+	if err != nil {
+		fmt.Fprintf(w, "0")
+		return
+	}
+
+	fmt.Println(li)
+	payloadJson, err := json.Marshal(&li)
+	if err != nil {
+		fmt.Fprintf(w, "0")
+		return
+	}
+
+	fmt.Println("sending post")
+	resp, err := sendPostRequest(fmt.Sprintf("%s/users/login", apiBaseUrl), bytes.NewReader(payloadJson))
+	if err != nil {
+		fmt.Fprintf(w, "0")
+		return
+	}
+	fmt.Println("received response")
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		data, _ := io.ReadAll(resp.Body)
+		fmt.Fprintf(w, "%s", string(data))
+		fmt.Printf("response: %v", data)
+		return
+	} else {
+		fmt.Fprintf(w, "0")
+		return
+	}
+}
+
+func sendPostRequest(url string, body io.Reader) (*http.Response, error) {
+	req, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		return nil, err
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 func main() {
 	chatHandler, err := chatstate.NewChatStateHandler()
 	if err != nil {
@@ -229,6 +282,9 @@ func main() {
 	//http.Handle("/login", http.StripPrefix("/web/", http.FileServer(http.Dir("web"))))
 	http.HandleFunc("/chatstream", func(w http.ResponseWriter, r *http.Request) {
 		streamChats(w, r, chatHandler)
+	})
+	http.HandleFunc("/handlelogin", func(w http.ResponseWriter, r *http.Request) {
+		loginWithUsernameAndPassword(w, r, chatHandler.GetApiBaseUrl())
 	})
 	http.HandleFunc("/", mainPage)
 	http.HandleFunc("/login", loginPage)

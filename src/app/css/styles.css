@@ -6,7 +6,7 @@ html, body {
     height: 100%;
 }
 
-body.center-vertically {
+div.center-vertically {
     height: 100vh; 
     display: flex; 
     justify-content: center; 

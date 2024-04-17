@@ -1,7 +1,7 @@
 sse = new SSEvents();
 sockets = new SocketConnections();
 
-let myid= 1;
+let myid= 0;
 let currentPage = "";
 let intervalId = null;
 
@@ -10,7 +10,7 @@ document.addEventListener("DOMContentLoaded", function() {
     const myChatsButton = document.getElementById("my-chats-button");
     const allChatsButton = document.getElementById("all-chats-button");
     const logoutButton = document.getElementById("logout-button");
-
+    
     availableChatsButton.addEventListener("click", function(event) {
         currentPage = "availableChats";
         loadChildPageContent(event, "/chats");
@@ -26,12 +26,11 @@ document.addEventListener("DOMContentLoaded", function() {
         loadChildPageContent(event, "/chats");
     });
 
-    window.addEventListener("message", function(event) {
-        let receivedData = event.data;
-        console.log("received data from child page: ", receivedData)
-        if (receivedData.operation === "sendMessage") {
-            sockets.sendMessage(receivedData.message);
-        }
+    logoutButton.addEventListener("click", function(event) {
+        myid = 0;
+        setNavbarVisibility(false);
+        currentPage = "login";
+        loadChildPageContent(event, "/login");
     });
 
     // Get the navbar element
@@ -41,11 +40,38 @@ document.addEventListener("DOMContentLoaded", function() {
     // Set the height of the container dynamically
     var container = document.querySelector(".container");
     container.style.height = "calc(100% - " + navbarHeight + "px)";
+
+    window.addEventListener("message", function(event) {
+        let receivedData = event.data;
+        console.log("received data from child page: ", receivedData)
+        if (receivedData.operation === "sendMessage") {
+            sockets.sendMessage(receivedData.message);
+        }
+        if (receivedData.operation === "Login") {
+            console.log("received login message");
+            myid = receivedData.message;
+            if (myid > 0) { 
+                setNavbarVisibility(true);
+                currentPage = "allChats";
+                loadChildPageContent(event, "/chats");
+            } else {
+                alert("Invalid login credentials");
+            }
+        }
+    });
+
+    if (myid === 0) {
+        setNavbarVisibility(false);
+        loadChildPageContent(null, "/login");
+        currentPage = "login";
+    }
 });
 
 
 function loadChildPageContent(event, pageUrl) {
-    event.preventDefault();
+    if (event !== null) {
+        event.preventDefault();
+    }
     console.log("loading child page content");
     // Make an AJAX request to fetch content from child page
     let xhr = new XMLHttpRequest();
@@ -303,4 +329,9 @@ function reloadChatMessages() {
     if (guid) {
         sockets.renderMessagesToChatInterface(guid);
     };
+}
+
+function setNavbarVisibility(isVisible) {
+    const navbar = document.getElementById("navbar");
+    navbar.style.display = isVisible ? "flex" : "none";
 }
